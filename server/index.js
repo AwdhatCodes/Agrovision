@@ -30,6 +30,40 @@ function haversine(lat1, lng1, lat2, lng2) {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a))
 }
 
+const KENYA_PLACES = [
+  { name: 'Ngong', county: 'Kajiado County', lat: -1.3527, lng: 36.6699 },
+  { name: 'Ongata Rongai', county: 'Kajiado County', lat: -1.3976, lng: 36.7649 },
+  { name: 'Karen', county: 'Nairobi County', lat: -1.3197, lng: 36.7061 },
+  { name: 'Kiserian', county: 'Kajiado County', lat: -1.4282, lng: 36.6867 },
+  { name: 'Nairobi', county: 'Nairobi County', lat: -1.2864, lng: 36.8172 },
+  { name: 'Kikuyu', county: 'Kiambu County', lat: -1.2463, lng: 36.6629 },
+  { name: 'Kiambu', county: 'Kiambu County', lat: -1.1714, lng: 36.8356 },
+  { name: 'Nakuru', county: 'Nakuru County', lat: -0.3031, lng: 36.0800 },
+  { name: 'Meru', county: 'Meru County', lat: 0.0463, lng: 37.6559 },
+  { name: 'Eldoret', county: 'Uasin Gishu County', lat: 0.5143, lng: 35.2698 },
+]
+
+function inferBuyerRegion(lat, lng) {
+  const nearest = KENYA_PLACES
+    .map(place => ({ ...place, distance: haversine(lat, lng, place.lat, place.lng) }))
+    .sort((a, b) => a.distance - b.distance)[0]
+  if (!nearest || nearest.distance > 35) return 'Precise coordinates'
+  return `${nearest.name}, ${nearest.county}`
+}
+
+function preciseLocationLabel(region, lat, lng) {
+  return `${region} (${lat.toFixed(5)}, ${lng.toFixed(5)})`
+}
+
+function parseBuyerCoords(body = {}) {
+  const lat = parseFloat(body.buyer_lat)
+  const lng = parseFloat(body.buyer_lng)
+  return {
+    buyer_lat: Number.isFinite(lat) ? lat : null,
+    buyer_lng: Number.isFinite(lng) ? lng : null,
+  }
+}
+
 // Simulate AI disease diagnosis
 function simulateDiagnosis(filename = '', fileSize = 0) {
   // Use filename and size to produce deterministic-ish results
@@ -76,7 +110,7 @@ app.post('/api/auth/register', async (req, res) => {
     const id = randomUUID()
     const validRole = ['buyer','farmer','admin'].includes(role) ? role : 'farmer'
     db.prepare('INSERT INTO users (id, name, email, password_hash, role, avatar_color) VALUES (?, ?, ?, ?, ?, ?)').run(id, name.trim(), email.toLowerCase().trim(), password_hash, validRole, avatar_color)
-    const user = db.prepare('SELECT id, name, email, role, avatar_color, created_at FROM users WHERE id = ?').get(id)
+    const user = db.prepare('SELECT id, name, email, role, avatar_color, buyer_lat, buyer_lng, buyer_region, buyer_location, created_at FROM users WHERE id = ?').get(id)
     const token = signToken({ id: user.id, email: user.email, role: user.role })
     res.status(201).json({ token, user })
   } catch (err) {
@@ -107,8 +141,19 @@ app.get('/api/auth/me', (req, res) => {
   if (!auth?.startsWith('Bearer ')) return res.status(401).json({ error: 'Unauthorized' })
   const payload = verifyToken(auth.slice(7))
   if (!payload) return res.status(401).json({ error: 'Invalid token' })
-  const user = db.prepare('SELECT id, name, email, role, avatar_color, created_at FROM users WHERE id = ?').get(payload.id)
+  const user = db.prepare('SELECT id, name, email, role, avatar_color, buyer_lat, buyer_lng, buyer_region, buyer_location, created_at FROM users WHERE id = ?').get(payload.id)
   if (!user) return res.status(404).json({ error: 'User not found' })
+  res.json(user)
+})
+
+app.put('/api/users/location', requireAuth, (req, res) => {
+  const lat = parseFloat(req.body.lat)
+  const lng = parseFloat(req.body.lng)
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return res.status(400).json({ error: 'Valid lat and lng required' })
+  const buyer_region = inferBuyerRegion(lat, lng)
+  const buyer_location = preciseLocationLabel(buyer_region, lat, lng)
+  db.prepare('UPDATE users SET buyer_lat=?, buyer_lng=?, buyer_region=?, buyer_location=? WHERE id=?').run(lat, lng, buyer_region, buyer_location, req.user.id)
+  const user = db.prepare('SELECT id, name, email, role, avatar_color, buyer_lat, buyer_lng, buyer_region, buyer_location, created_at FROM users WHERE id = ?').get(req.user.id)
   res.json(user)
 })
 
@@ -257,6 +302,88 @@ app.patch('/api/reviews/:id/reject', (req, res) => { db.prepare(`UPDATE reviews 
 app.delete('/api/reviews/:id', (req, res) => { db.prepare(`DELETE FROM reviews WHERE id=?`).run(req.params.id); res.json({ success: true }) })
 
 // ── CERTIFICATIONS ──
+app.post('/api/checkout', (req, res) => {
+  try {
+    const { product_id, quantity = 1, payment_method, buyer_name, buyer_region, buyer_location, phone, email, card_last4 } = req.body
+    const { buyer_lat, buyer_lng } = parseBuyerCoords(req.body)
+    const qty = parseInt(quantity)
+    const allowedMethods = ['paypal', 'card', 'mpesa']
+    if (!product_id || !allowedMethods.includes(payment_method)) return res.status(400).json({ error: 'Product and payment method required' })
+    if (!Number.isInteger(qty) || qty < 1) return res.status(400).json({ error: 'Quantity must be at least 1' })
+    if (!buyer_name?.trim()) return res.status(400).json({ error: 'Buyer name required' })
+
+    const product = db.prepare("SELECT * FROM products WHERE id=? AND status='approved' AND quarantined=0").get(product_id)
+    if (!product) return res.status(404).json({ error: 'Product is not available for checkout' })
+    if (product.quantity < qty) return res.status(409).json({ error: 'Not enough stock available' })
+    if (payment_method === 'mpesa' && !phone?.trim()) return res.status(400).json({ error: 'M-Pesa phone number required' })
+    if (payment_method === 'paypal' && !email?.trim()) return res.status(400).json({ error: 'PayPal email required' })
+    if (payment_method === 'card' && !card_last4?.trim()) return res.status(400).json({ error: 'Card last four digits required' })
+
+    const id = randomUUID()
+    const referencePrefix = payment_method === 'mpesa' ? 'MPESA' : payment_method === 'paypal' ? 'PAYPAL' : 'CARD'
+    const payment_reference = `${referencePrefix}-${id.slice(0, 8).toUpperCase()}`
+    const revenue = Math.round(product.price * qty * 100) / 100
+
+    const createSale = db.transaction(() => {
+      db.prepare('UPDATE products SET quantity=quantity-? WHERE id=?').run(qty, product_id)
+      db.prepare(`INSERT INTO sales (id,product_id,farm_id,quantity,revenue,buyer_region,buyer_lat,buyer_lng,buyer_location,buyer_name,payment_method,payment_reference,payment_status)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,'paid')`).run(id, product_id, product.farm_id, qty, revenue, buyer_region || null, buyer_lat, buyer_lng, buyer_location || null, buyer_name.trim(), payment_method, payment_reference)
+    })
+    createSale()
+
+    res.status(201).json({ id, payment_reference, payment_status: 'paid', payment_method, quantity: qty, total: revenue })
+  } catch (err) {
+    console.error('Checkout error:', err)
+    res.status(500).json({ error: 'Checkout failed' })
+  }
+})
+
+app.post('/api/checkout-cart', (req, res) => {
+  try {
+    const { items = [], payment_method, buyer_name, buyer_region, buyer_location, phone, email, card_last4 } = req.body
+    const { buyer_lat, buyer_lng } = parseBuyerCoords(req.body)
+    const allowedMethods = ['paypal', 'card', 'mpesa']
+    if (!Array.isArray(items) || items.length === 0) return res.status(400).json({ error: 'Cart is empty' })
+    if (!allowedMethods.includes(payment_method)) return res.status(400).json({ error: 'Payment method required' })
+    if (!buyer_name?.trim()) return res.status(400).json({ error: 'Buyer name required' })
+    if (payment_method === 'mpesa' && !phone?.trim()) return res.status(400).json({ error: 'M-Pesa phone number required' })
+    if (payment_method === 'paypal' && !email?.trim()) return res.status(400).json({ error: 'PayPal email required' })
+    if (payment_method === 'card' && !card_last4?.trim()) return res.status(400).json({ error: 'Card last four digits required' })
+
+    const normalized = items.map(item => ({ product_id: item.product_id, quantity: parseInt(item.quantity) }))
+    if (normalized.some(item => !item.product_id || !Number.isInteger(item.quantity) || item.quantity < 1)) {
+      return res.status(400).json({ error: 'Every cart item needs a product and quantity' })
+    }
+
+    const products = normalized.map(item => {
+      const product = db.prepare("SELECT * FROM products WHERE id=? AND status='approved' AND quarantined=0").get(item.product_id)
+      if (!product) throw Object.assign(new Error('Product is not available for checkout'), { status: 404 })
+      if (product.quantity < item.quantity) throw Object.assign(new Error(`Not enough stock for ${product.name}`), { status: 409 })
+      return { ...item, product }
+    })
+
+    const referencePrefix = payment_method === 'mpesa' ? 'MPESA' : payment_method === 'paypal' ? 'PAYPAL' : 'CARD'
+    const payment_reference = `${referencePrefix}-${randomUUID().slice(0, 8).toUpperCase()}`
+    const total = Math.round(products.reduce((sum, item) => sum + item.product.price * item.quantity, 0) * 100) / 100
+
+    const createSales = db.transaction(() => {
+      for (const item of products) {
+        const saleId = randomUUID()
+        const revenue = Math.round(item.product.price * item.quantity * 100) / 100
+        db.prepare('UPDATE products SET quantity=quantity-? WHERE id=?').run(item.quantity, item.product_id)
+        db.prepare(`INSERT INTO sales (id,product_id,farm_id,quantity,revenue,buyer_region,buyer_lat,buyer_lng,buyer_location,buyer_name,payment_method,payment_reference,payment_status)
+          VALUES (?,?,?,?,?,?,?,?,?,?,?,?,'paid')`).run(saleId, item.product_id, item.product.farm_id, item.quantity, revenue, buyer_region || null, buyer_lat, buyer_lng, buyer_location || null, buyer_name.trim(), payment_method, payment_reference)
+      }
+    })
+    createSales()
+
+    res.status(201).json({ payment_reference, payment_status: 'paid', payment_method, item_count: products.length, total })
+  } catch (err) {
+    console.error('Cart checkout error:', err)
+    res.status(err.status || 500).json({ error: err.message || 'Cart checkout failed' })
+  }
+})
+
 app.get('/api/certifications', (req, res) => {
   const { farm_id } = req.query
   let q = `SELECT c.*, f.name as farm_name, f.region FROM certifications c JOIN farms f ON f.id=c.farm_id`

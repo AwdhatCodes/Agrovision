@@ -1,7 +1,7 @@
 /**
  * PostgreSQL database module for FarmMarket
  *
- * SETUP: Add these environment variables in Replit Secrets:
+ * SETUP: Add these environment variables in your deployment environment:
  *   DATABASE_URL   — full connection string (e.g. postgresql://user:pass@host/dbname)
  *   OR individually:
  *   PGHOST         — database host
@@ -10,7 +10,7 @@
  *   PGUSER         — database user
  *   PGPASSWORD     — database password
  *
- * Once DATABASE_URL (or PG* vars) are set, restart the API Server workflow.
+ * Once DATABASE_URL (or PG* vars) are set, restart the API server.
  * The app will automatically switch from SQLite to PostgreSQL.
  */
 
@@ -48,6 +48,10 @@ export async function initPostgres() {
         password_hash TEXT NOT NULL,
         role TEXT DEFAULT 'buyer' CHECK(role IN ('buyer','farmer','admin')),
         avatar_color TEXT DEFAULT '#4ade80',
+        buyer_lat REAL,
+        buyer_lng REAL,
+        buyer_region TEXT,
+        buyer_location TEXT,
         created_at TIMESTAMPTZ DEFAULT NOW()
       );
 
@@ -129,6 +133,13 @@ export async function initPostgres() {
         quantity INTEGER NOT NULL,
         revenue REAL NOT NULL,
         buyer_region TEXT,
+        buyer_lat REAL,
+        buyer_lng REAL,
+        buyer_location TEXT,
+        buyer_name TEXT,
+        payment_method TEXT DEFAULT 'card',
+        payment_reference TEXT,
+        payment_status TEXT DEFAULT 'paid',
         created_at TIMESTAMPTZ DEFAULT NOW()
       );
 

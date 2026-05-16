@@ -44,7 +44,7 @@ function ApprovalsTab({ pending, acting, approve, reject }) {
                 </div>
               </div>
               <div style={{ textAlign: 'right', minWidth: 90 }}>
-                <p style={{ fontWeight: 700, color: 'var(--accent)', fontSize: 17 }}>${p.price.toFixed(2)}</p>
+                <p style={{ fontWeight: 700, color: 'var(--accent)', fontSize: 17 }}>KSh {Number(p.price).toLocaleString()}</p>
                 <p style={{ fontSize: 11, color: 'var(--text3)' }}>Qty: {p.quantity}</p>
               </div>
               <div style={{ display: 'flex', gap: 7 }}>
@@ -279,7 +279,7 @@ function QuarantineTab({ onUpdate }) {
                   <span style={{ fontSize: 11, color: 'var(--text3)', display: 'flex', alignItems: 'center', gap: 3 }}><MapPin size={9} />{p.farm_name} · {p.region}</span>
                 </div>
               </div>
-              <span style={{ fontWeight: 700, color: p.quarantined ? 'var(--text3)' : 'var(--accent)', fontSize: 13 }}>${p.price.toFixed(2)}</span>
+              <span style={{ fontWeight: 700, color: p.quarantined ? 'var(--text3)' : 'var(--accent)', fontSize: 13 }}>KSh {Number(p.price).toLocaleString()}</span>
               {p.quarantined===1 ? (
                 <button className="btn btn-secondary" style={{ padding:'5px 11px',fontSize:12 }} onClick={() => unquarantine(p.id)} disabled={acting[p.id]}><Unlock size={11}/> Release</button>
               ) : (

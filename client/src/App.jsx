@@ -84,6 +84,10 @@ export default function App() {
   }, [user])
 
   const handleAuth = (u) => { setUser(u); setPage('market') }
+  const updateUser = (u) => {
+    setUser(u)
+    localStorage.setItem('fm_user', JSON.stringify(u))
+  }
 
   const logout = () => {
     localStorage.removeItem('fm_token')
@@ -172,7 +176,7 @@ export default function App() {
       </header>
 
       <main style={{ flex: 1 }}>
-        {page === 'market' && <Marketplace />}
+        {page === 'market' && <Marketplace user={user} onUserUpdate={updateUser} />}
         {page === 'map' && <FarmMap />}
         {page === 'scan' && <DiagnosisPage user={user} />}
         {page === 'fieldlog' && <FieldLogPage user={user} />}

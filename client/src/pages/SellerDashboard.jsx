@@ -143,7 +143,7 @@ function AnalyticsTab({ farmId }) {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(190px, 1fr))', gap: 14 }}>
         {[
-          { label: 'Total Revenue', value: `$${Number(data.totalRevenue).toFixed(2)}`, icon: DollarSign, color: 'var(--accent)' },
+          { label: 'Total Revenue', value: `KSh ${Number(data.totalRevenue).toLocaleString()}`, icon: DollarSign, color: 'var(--accent)' },
           { label: 'Units Sold', value: data.totalSales, icon: ShoppingCart, color: 'var(--blue)' },
           { label: 'Product Views', value: data.totalViews, icon: Eye, color: 'var(--warning)' },
         ].map(({ label, value, icon: Icon, color }) => (
@@ -167,7 +167,7 @@ function AnalyticsTab({ farmId }) {
                 <div key={m.month} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                   <span style={{ fontSize: 11, color: 'var(--text3)', width: 54, flexShrink: 0 }}>{m.month?.slice(2)}</span>
                   <MiniBar value={m.revenue} max={maxMonth} />
-                  <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--accent)', width: 60, textAlign: 'right', flexShrink: 0 }}>${Number(m.revenue).toFixed(0)}</span>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--accent)', width: 78, textAlign: 'right', flexShrink: 0 }}>KSh {Number(m.revenue).toLocaleString()}</span>
                 </div>
               ))}
             </div>
@@ -198,7 +198,7 @@ function AnalyticsTab({ farmId }) {
                     <p style={{ fontSize: 12, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: 4 }}>{p.name}</p>
                     <MiniBar value={p.revenue} max={maxRevenue} color='var(--blue)' />
                   </div>
-                  <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--blue)', width: 60, textAlign: 'right', flexShrink: 0 }}>${Number(p.revenue).toFixed(0)}</span>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--blue)', width: 78, textAlign: 'right', flexShrink: 0 }}>KSh {Number(p.revenue).toLocaleString()}</span>
                 </div>
               ))}
             </div>
@@ -215,7 +215,7 @@ function AnalyticsTab({ farmId }) {
             {data.byRegion.map(r => (
               <div key={r.buyer_region} style={{ flex: '1 1 180px', padding: '10px 14px', background: 'var(--bg3)', borderRadius: 8, border: '1px solid var(--border)' }}>
                 <p style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>{r.buyer_region}</p>
-                <p style={{ fontSize: 12, color: 'var(--accent)' }}>${Number(r.revenue).toFixed(2)} revenue</p>
+                <p style={{ fontSize: 12, color: 'var(--accent)' }}>KSh {Number(r.revenue).toLocaleString()} revenue</p>
                 <p style={{ fontSize: 11, color: 'var(--text3)' }}>{r.units} units sold</p>
               </div>
             ))}
@@ -345,7 +345,7 @@ export default function SellerDashboard() {
                     </div>
                   </div>
                   <div style={{ textAlign: 'right', minWidth: 80 }}>
-                    <p style={{ fontWeight: 700, color: 'var(--accent)', fontSize: 15 }}>${p.price.toFixed(2)}</p>
+                    <p style={{ fontWeight: 700, color: 'var(--accent)', fontSize: 15 }}>KSh {Number(p.price).toLocaleString()}</p>
                     <p style={{ fontSize: 11, color: 'var(--text3)' }}>Qty: {p.quantity}</p>
                   </div>
                   <div style={{ minWidth: 86 }}>{statusBadge(p.status)}{p.quarantined === 1 && <span className="badge badge-red" style={{ fontSize: 10, marginTop: 4, display: 'inline-flex' }}>Quarantined</span>}</div>

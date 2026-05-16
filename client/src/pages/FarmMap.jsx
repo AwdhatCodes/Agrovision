@@ -97,7 +97,7 @@ function FarmPanel({ farm, onClose }) {
                     {p.quarantined === 1 && <span style={{ fontSize: 9, color: '#f87171' }}>⚠ Quarantined</span>}
                   </div>
                 </div>
-                <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--accent)', flexShrink: 0 }}>${p.price.toFixed(2)}</span>
+                <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--accent)', flexShrink: 0 }}>KSh {Number(p.price).toLocaleString()}</span>
               </div>
             ))}
           </div>

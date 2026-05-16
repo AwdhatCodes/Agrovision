@@ -16,6 +16,10 @@ db.exec(`
     password_hash TEXT NOT NULL,
     role TEXT DEFAULT 'buyer' CHECK(role IN ('buyer', 'farmer', 'admin')),
     avatar_color TEXT DEFAULT '#4ade80',
+    buyer_lat REAL,
+    buyer_lng REAL,
+    buyer_region TEXT,
+    buyer_location TEXT,
     created_at TEXT DEFAULT (datetime('now'))
   );
 
@@ -107,6 +111,13 @@ db.exec(`
     quantity INTEGER NOT NULL,
     revenue REAL NOT NULL,
     buyer_region TEXT,
+    buyer_lat REAL,
+    buyer_lng REAL,
+    buyer_location TEXT,
+    buyer_name TEXT,
+    payment_method TEXT DEFAULT 'card',
+    payment_reference TEXT,
+    payment_status TEXT DEFAULT 'paid',
     created_at TEXT DEFAULT (datetime('now')),
     FOREIGN KEY (product_id) REFERENCES products(id),
     FOREIGN KEY (farm_id) REFERENCES farms(id)
@@ -136,11 +147,22 @@ addCol('farms', 'owner_email', 'TEXT')
 addCol('farms', 'owner_phone', 'TEXT')
 addCol('farms', 'certified_clean', 'INTEGER DEFAULT 0')
 addCol('farms', 'user_id', 'TEXT')
+addCol('users', 'buyer_lat', 'REAL')
+addCol('users', 'buyer_lng', 'REAL')
+addCol('users', 'buyer_region', 'TEXT')
+addCol('users', 'buyer_location', 'TEXT')
 addCol('products', 'quarantined', 'INTEGER DEFAULT 0')
 addCol('products', 'disease_type', 'TEXT DEFAULT "none"')
 addCol('products', 'views', 'INTEGER DEFAULT 0')
 addCol('region_disease_risk', 'blight_type', 'TEXT DEFAULT "none"')
 addCol('disease_alerts', 'blight_type', 'TEXT DEFAULT "early_blight"')
+addCol('sales', 'buyer_name', 'TEXT')
+addCol('sales', 'buyer_lat', 'REAL')
+addCol('sales', 'buyer_lng', 'REAL')
+addCol('sales', 'buyer_location', 'TEXT')
+addCol('sales', 'payment_method', 'TEXT DEFAULT "card"')
+addCol('sales', 'payment_reference', 'TEXT')
+addCol('sales', 'payment_status', 'TEXT DEFAULT "paid"')
 
 const seedData = db.transaction(() => {
   const insertFarm = db.prepare(`INSERT OR IGNORE INTO farms (id, name, region, disease_safe, certified_clean, rating, rating_count, lat, lng, owner_email, owner_phone) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
