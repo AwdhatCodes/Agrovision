@@ -8,10 +8,10 @@ const RISK_BG = { safe: 'rgba(74,222,128,0.12)', watch: 'rgba(251,191,36,0.12)',
 const BLIGHT_LABELS = { early_blight: 'Early Blight', late_blight: 'Late Blight', none: 'None' }
 
 const REGION_CENTERS = {
-  'Northern Region': [11.8, 8.5],
-  'Southern Region': [5.6, 7.2],
-  'Eastern Region': [6.8, 11.4],
-  'Western Region': [7.4, 3.9],
+  'Nyandarua County': [-0.65, 36.52],
+  'Meru County': [0.05, 37.65],
+  'Nakuru County': [-0.30, 36.07],
+  'Uasin Gishu': [0.52, 35.27],
 }
 
 function farmIconSvg(riskLevel, certified) {
@@ -136,8 +136,8 @@ export default function FarmMap() {
     if (mapInstanceRef.current) return // already initialized
 
     const map = L.map(mapRef.current, {
-      center: [8.0, 7.5],
-      zoom: 6,
+      center: [0.02, 37.9],
+      zoom: 7,
       zoomControl: true,
     })
     mapInstanceRef.current = map

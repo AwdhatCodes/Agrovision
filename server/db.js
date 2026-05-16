@@ -145,27 +145,28 @@ addCol('disease_alerts', 'blight_type', 'TEXT DEFAULT "early_blight"')
 const seedData = db.transaction(() => {
   const insertFarm = db.prepare(`INSERT OR IGNORE INTO farms (id, name, region, disease_safe, certified_clean, rating, rating_count, lat, lng, owner_email, owner_phone) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
   const farms = [
-    ['farm-1', 'Green Valley Potato Farm', 'Northern Region', 1, 1, 4.8, 120, 11.8, 8.5, 'seller@greenvalley.farm', '+234-801-000-001'],
-    ['farm-2', 'Sunrise Agricultural', 'Southern Region', 0, 0, 4.2, 85, 5.6, 7.2, 'info@sunriseag.farm', '+234-802-000-002'],
-    ['farm-3', 'Heritage Potato Co.', 'Eastern Region', 1, 1, 4.9, 210, 6.8, 11.4, 'contact@heritageseeds.farm', '+234-803-000-003'],
-    ['farm-4', 'Golden Fields Farm', 'Western Region', 0, 0, 3.9, 44, 7.4, 3.9, 'admin@goldenfields.farm', '+234-804-000-004'],
+    ['farm-1', 'Kinangop Potato Farm', 'Nyandarua County', 1, 1, 4.8, 120, -0.65, 36.55, 'info@kinangopfarm.co.ke', '+254-722-100-001'],
+    ['farm-2', 'Meru Highlands Agro', 'Meru County', 1, 1, 4.9, 210, 0.05, 37.65, 'sales@meruagro.co.ke', '+254-733-200-002'],
+    ['farm-3', 'Rift Valley Seeds Ltd', 'Nakuru County', 0, 0, 4.2, 85, -0.30, 36.07, 'orders@riftvalleyseeds.co.ke', '+254-711-300-003'],
+    ['farm-4', 'Eldoret Highland Farm', 'Uasin Gishu', 0, 0, 3.9, 44, 0.52, 35.27, 'farm@eldorethighland.co.ke', '+254-700-400-004'],
+    ['farm-5', 'Timau Seed Centre', 'Meru County', 1, 1, 4.6, 97, 0.17, 37.26, 'timau@seedcentre.co.ke', '+254-720-500-005'],
+    ['farm-6', 'Ol Joro Orok Cooperative', 'Nyandarua County', 0, 0, 4.0, 53, -0.02, 36.60, 'coop@oljoroorok.co.ke', '+254-714-600-006'],
   ]
   farms.forEach(f => insertFarm.run(...f))
-  db.prepare(`UPDATE farms SET lat=11.8, lng=8.5, certified_clean=1 WHERE id='farm-1'`).run()
-  db.prepare(`UPDATE farms SET lat=5.6, lng=7.2, certified_clean=0 WHERE id='farm-2'`).run()
-  db.prepare(`UPDATE farms SET lat=6.8, lng=11.4, certified_clean=1 WHERE id='farm-3'`).run()
-  db.prepare(`UPDATE farms SET lat=7.4, lng=3.9, certified_clean=0 WHERE id='farm-4'`).run()
 
   const insertProduct = db.prepare(`INSERT OR IGNORE INTO products (id, name, category, price, quantity, farm_id, disease_risk_tag, disease_type, image_url, status, views) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
   const insertFts = db.prepare(`INSERT OR IGNORE INTO products_fts (product_id, name, farm_name) VALUES (?, ?, ?)`)
   const products = [
-    ['prod-1', 'Certified Potato Seed (1kg)', 'seed', 12.50, 500, 'farm-1', 'low', 'none', null, 'approved', 340],
-    ['prod-2', 'NPK Potato Fertiliser 20kg', 'fertiliser', 45.00, 200, 'farm-2', 'low', 'none', null, 'approved', 210],
-    ['prod-3', 'Fresh Potatoes (5kg)', 'produce', 8.75, 150, 'farm-3', 'low', 'none', null, 'approved', 520],
-    ['prod-4', 'Highland Potato Seeds 500g', 'seed', 6.00, 800, 'farm-3', 'low', 'none', null, 'approved', 180],
-    ['prod-5', 'Blight-Control Fertiliser 10kg', 'fertiliser', 22.00, 300, 'farm-1', 'low', 'none', null, 'approved', 145],
-    ['prod-6', 'Early Blight Resistant Seeds', 'seed', 9.50, 90, 'farm-4', 'medium', 'early_blight', null, 'approved', 62],
-    ['prod-7', 'Potato Fungicide Spray 2L', 'fertiliser', 18.00, 400, 'farm-2', 'medium', 'late_blight', null, 'pending', 0],
+    ['prod-1', 'Certified Kenya Mpya Seed (1kg)', 'seed', 350.00, 500, 'farm-1', 'low', 'none', null, 'approved', 340],
+    ['prod-2', 'CAN Potato Fertiliser 50kg', 'fertiliser', 3200.00, 200, 'farm-3', 'low', 'none', null, 'approved', 210],
+    ['prod-3', 'Fresh Shangi Potatoes (5kg)', 'produce', 280.00, 150, 'farm-2', 'low', 'none', null, 'approved', 520],
+    ['prod-4', 'Dutch Robyjn Seed Potato 500g', 'seed', 180.00, 800, 'farm-2', 'low', 'none', null, 'approved', 180],
+    ['prod-5', 'Blight-Control Dithane 1kg', 'fertiliser', 650.00, 300, 'farm-1', 'low', 'none', null, 'approved', 145],
+    ['prod-6', 'Early Blight Resistant Markies Seed', 'seed', 420.00, 90, 'farm-4', 'medium', 'early_blight', null, 'approved', 62],
+    ['prod-7', 'Ridomil Gold Fungicide 1kg', 'fertiliser', 1800.00, 400, 'farm-3', 'medium', 'late_blight', null, 'pending', 0],
+    ['prod-8', 'Certified Tigoni Seed Potato 2kg', 'seed', 580.00, 300, 'farm-5', 'low', 'none', null, 'approved', 95],
+    ['prod-9', 'Organic Potato Compost 25kg', 'fertiliser', 900.00, 120, 'farm-6', 'low', 'none', null, 'approved', 67],
+    ['prod-10', 'Fresh Rosetta Potatoes 10kg', 'produce', 520.00, 200, 'farm-1', 'low', 'none', null, 'approved', 310],
   ]
   products.forEach(([id, name, cat, price, qty, fid, risk, dtype, img, status, views]) => {
     insertProduct.run(id, name, cat, price, qty, fid, risk, dtype, img, status, views)
@@ -175,42 +176,47 @@ const seedData = db.transaction(() => {
 
   const upsertRegion = db.prepare(`INSERT INTO region_disease_risk (region, risk_level, detection_count, blight_type) VALUES (?, ?, ?, ?)
     ON CONFLICT(region) DO UPDATE SET risk_level=excluded.risk_level, detection_count=excluded.detection_count, blight_type=excluded.blight_type`)
-  upsertRegion.run('Northern Region', 'safe', 2, 'none')
-  upsertRegion.run('Southern Region', 'watch', 8, 'late_blight')
-  upsertRegion.run('Eastern Region', 'safe', 1, 'none')
-  upsertRegion.run('Western Region', 'outbreak', 19, 'early_blight')
+  upsertRegion.run('Nyandarua County', 'safe', 1, 'none')
+  upsertRegion.run('Meru County', 'safe', 2, 'none')
+  upsertRegion.run('Nakuru County', 'watch', 7, 'late_blight')
+  upsertRegion.run('Uasin Gishu', 'outbreak', 18, 'early_blight')
 
   const insertAlert = db.prepare(`INSERT OR IGNORE INTO disease_alerts (id, region, message, severity, blight_type, simulated_email, simulated_sms) VALUES (?, ?, ?, ?, ?, ?, ?)`)
-  insertAlert.run('alert-1', 'Western Region', 'Early Blight outbreak in Western Region — 19 potato farms affected. Listings quarantined pending inspection.', 'outbreak', 'early_blight', 1, 1)
-  insertAlert.run('alert-2', 'Southern Region', 'Late Blight activity elevated in Southern Region (8 detections). Sellers advised to inspect crops before listing.', 'watch', 'late_blight', 1, 0)
+  insertAlert.run('alert-1', 'Uasin Gishu', 'Early Blight outbreak in Uasin Gishu — 18 farms affected around Eldoret. Listings quarantined pending KEPHIS inspection.', 'outbreak', 'early_blight', 1, 1)
+  insertAlert.run('alert-2', 'Nakuru County', 'Late Blight activity rising in Nakuru County (7 detections). Farmers advised to apply Ridomil Gold and inspect before listing.', 'watch', 'late_blight', 1, 0)
 
   const insertCert = db.prepare(`INSERT OR IGNORE INTO certifications (id, farm_id, status, reason, blight_type) VALUES (?, ?, ?, ?, ?)`)
-  insertCert.run('cert-1', 'farm-1', 'certified', 'AI scan passed — no Early or Late Blight detected', 'none')
-  insertCert.run('cert-2', 'farm-3', 'certified', 'AI scan passed — no Early or Late Blight detected', 'none')
-  insertCert.run('cert-3', 'farm-4', 'revoked', 'Early Blight detected by AI diagnosis module', 'early_blight')
+  insertCert.run('cert-1', 'farm-1', 'certified', 'KEPHIS AI scan passed — no Early or Late Blight detected', 'none')
+  insertCert.run('cert-2', 'farm-2', 'certified', 'KEPHIS AI scan passed — no Early or Late Blight detected', 'none')
+  insertCert.run('cert-3', 'farm-5', 'certified', 'KEPHIS AI scan passed — certified disease-free seed stock', 'none')
+  insertCert.run('cert-4', 'farm-4', 'revoked', 'Early Blight detected by AgroVision AI diagnosis — pending re-inspection', 'early_blight')
 
   const insertReview = db.prepare(`INSERT OR IGNORE INTO reviews (id, product_id, farm_id, rating, comment, buyer_name, approved) VALUES (?, ?, ?, ?, ?, ?, ?)`)
-  insertReview.run('rev-1', 'prod-1', 'farm-1', 5, 'Excellent certified seeds, germination rate was outstanding. Disease-free as advertised!', 'Emeka O.', 1)
-  insertReview.run('rev-2', 'prod-1', 'farm-1', 4, 'Good quality potato seeds, delivered in 3 days from Northern Region.', 'Aisha M.', 1)
-  insertReview.run('rev-3', 'prod-3', 'farm-3', 5, 'Fresh potatoes, great weight and no blight signs. Will reorder.', 'Chidi N.', 1)
-  insertReview.run('rev-4', 'prod-3', 'farm-3', 4, 'Quality produce from Heritage Potato Co. Arrived well-packed.', 'Fatima B.', 1)
-  insertReview.run('rev-5', 'prod-2', 'farm-2', 3, 'Fertiliser works but delivery took longer than expected.', 'Taiwo A.', 1)
-  insertReview.run('rev-6', 'prod-5', 'farm-1', 5, 'Best blight-control fertiliser on the market. Saved my entire crop!', 'Bayo K.', 1)
+  insertReview.run('rev-1', 'prod-1', 'farm-1', 5, 'Excellent certified Mpya seeds, germination was nearly 100%. Disease-free as labelled — from Nairobi.', 'James K.', 1)
+  insertReview.run('rev-2', 'prod-1', 'farm-1', 4, 'Good quality seed potatoes, delivered to Nakuru in 2 days. Highly recommend Kinangop Farm.', 'Wanjiru M.', 1)
+  insertReview.run('rev-3', 'prod-3', 'farm-2', 5, 'Fresh Shangi potatoes, great size and no blight signs. Will reorder from Meru Highlands.', 'David O.', 1)
+  insertReview.run('rev-4', 'prod-3', 'farm-2', 4, 'Quality produce. Arrived well-packed from Meru. Very fresh.', 'Achieng F.', 1)
+  insertReview.run('rev-5', 'prod-2', 'farm-3', 3, 'CAN fertiliser works well, but delivery from Nakuru took longer than expected.', 'Mutua A.', 1)
+  insertReview.run('rev-6', 'prod-5', 'farm-1', 5, 'Best blight-control product on the market. Dithane saved my entire Kinangop crop!', 'Kamau B.', 1)
+  insertReview.run('rev-7', 'prod-8', 'farm-5', 5, 'Timau Tigoni seeds are exceptional. Certified and healthy — germination perfect.', 'Njeri W.', 1)
+  insertReview.run('rev-8', 'prod-10', 'farm-1', 4, 'Great Rosetta potatoes from Kinangop. Perfect for the Nairobi market.', 'Omondi P.', 1)
 
   const insertSale = db.prepare(`INSERT OR IGNORE INTO sales (id, product_id, farm_id, quantity, revenue, buyer_region, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`)
   const salesData = [
-    ['sale-1','prod-1','farm-1',20,250.00,'Southern Region','2026-01-10'],
-    ['sale-2','prod-1','farm-1',35,437.50,'Eastern Region','2026-02-05'],
-    ['sale-3','prod-1','farm-1',10,125.00,'Northern Region','2026-03-14'],
-    ['sale-4','prod-1','farm-1', 5, 62.50,'Western Region','2026-04-20'],
-    ['sale-5','prod-3','farm-3',30,262.50,'Southern Region','2026-01-15'],
-    ['sale-6','prod-3','farm-3',25,218.75,'Northern Region','2026-02-22'],
-    ['sale-7','prod-3','farm-3',40,350.00,'Eastern Region','2026-03-30'],
-    ['sale-8','prod-5','farm-1',15,330.00,'Southern Region','2026-02-12'],
-    ['sale-9','prod-5','farm-1',20,440.00,'Eastern Region','2026-04-01'],
-    ['sale-10','prod-2','farm-2',10,450.00,'Northern Region','2026-01-28'],
-    ['sale-11','prod-2','farm-2', 8,360.00,'Western Region','2026-03-08'],
-    ['sale-12','prod-4','farm-3',50,300.00,'Southern Region','2026-04-15'],
+    ['sale-1', 'prod-1', 'farm-1', 20, 7000.00, 'Nakuru County', '2026-01-10'],
+    ['sale-2', 'prod-1', 'farm-1', 35, 12250.00, 'Meru County', '2026-02-05'],
+    ['sale-3', 'prod-1', 'farm-1', 10, 3500.00, 'Nyandarua County', '2026-03-14'],
+    ['sale-4', 'prod-1', 'farm-1',  5, 1750.00, 'Uasin Gishu', '2026-04-20'],
+    ['sale-5', 'prod-3', 'farm-2', 30, 8400.00, 'Nakuru County', '2026-01-15'],
+    ['sale-6', 'prod-3', 'farm-2', 25, 7000.00, 'Nyandarua County', '2026-02-22'],
+    ['sale-7', 'prod-3', 'farm-2', 40, 11200.00, 'Meru County', '2026-03-30'],
+    ['sale-8', 'prod-5', 'farm-1', 15, 9750.00, 'Nakuru County', '2026-02-12'],
+    ['sale-9', 'prod-5', 'farm-1', 20, 13000.00, 'Meru County', '2026-04-01'],
+    ['sale-10','prod-2', 'farm-3', 10, 32000.00, 'Nyandarua County', '2026-01-28'],
+    ['sale-11','prod-2', 'farm-3',  8, 25600.00, 'Uasin Gishu', '2026-03-08'],
+    ['sale-12','prod-4', 'farm-2', 50, 9000.00, 'Nakuru County', '2026-04-15'],
+    ['sale-13','prod-8', 'farm-5', 25, 14500.00, 'Nyandarua County', '2026-03-20'],
+    ['sale-14','prod-10','farm-1', 30, 15600.00, 'Nakuru County', '2026-04-10'],
   ]
   salesData.forEach(s => insertSale.run(...s))
 })
