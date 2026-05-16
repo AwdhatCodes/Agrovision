@@ -1,18 +1,22 @@
 import React, { useState, useEffect } from 'react'
-import { Sprout, ShoppingBasket, LayoutDashboard, ShieldCheck, Map, Bell, Microscope, LogOut, ChevronDown, User } from 'lucide-react'
+import { Sprout, ShoppingBasket, LayoutDashboard, ShieldCheck, Map, Bell, Microscope, LogOut, ChevronDown, ClipboardList, MessageSquare } from 'lucide-react'
 import Marketplace from './pages/Marketplace.jsx'
 import SellerDashboard from './pages/SellerDashboard.jsx'
 import AdminPanel from './pages/AdminPanel.jsx'
 import FarmMap from './pages/FarmMap.jsx'
 import AuthPage from './pages/AuthPage.jsx'
 import DiagnosisPage from './pages/DiagnosisPage.jsx'
+import FieldLogPage from './pages/FieldLogPage.jsx'
+import AgroBotPage from './pages/AgroBotPage.jsx'
 
 const NAV = [
   { id: 'market', label: 'Marketplace', icon: ShoppingBasket },
   { id: 'map', label: 'Farm Map', icon: Map },
   { id: 'scan', label: 'AI Scan', icon: Microscope },
-  { id: 'seller', label: 'Seller Dashboard', icon: LayoutDashboard },
-  { id: 'admin', label: 'Admin Panel', icon: ShieldCheck },
+  { id: 'fieldlog', label: 'Field Log', icon: ClipboardList },
+  { id: 'agrobot', label: 'Agro-Bot', icon: MessageSquare },
+  { id: 'seller', label: 'Seller Dashboard', icon: LayoutDashboard, roles: ['farmer', 'admin'] },
+  { id: 'admin', label: 'Admin Panel', icon: ShieldCheck, roles: ['admin'] },
 ]
 
 function UserMenu({ user, onLogout }) {
@@ -56,14 +60,12 @@ export default function App() {
   const [showAlerts, setShowAlerts] = useState(false)
   const [seenCount, setSeenCount] = useState(0)
 
-  // Restore session on mount
   useEffect(() => {
     const token = localStorage.getItem('fm_token')
     const stored = localStorage.getItem('fm_user')
     if (token && stored) {
       try {
         setUser(JSON.parse(stored))
-        // Verify token is still valid
         fetch('/api/auth/me', { headers: { Authorization: `Bearer ${token}` } })
           .then(r => r.ok ? r.json() : null)
           .then(u => { if (u) setUser(u); else logout() })
@@ -95,20 +97,19 @@ export default function App() {
   if (!user) return <AuthPage onAuth={handleAuth} />
 
   const visibleNav = NAV.filter(n => {
-    if (n.id === 'admin' && user.role !== 'admin') return false
-    if (n.id === 'seller' && user.role === 'buyer') return false
+    if (n.roles && !n.roles.includes(user.role)) return false
     return true
   })
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
       <header style={{ background: 'var(--bg2)', borderBottom: '1px solid var(--border)', position: 'sticky', top: 0, zIndex: 50 }}>
-        <div style={{ maxWidth: 1280, margin: '0 auto', padding: '0 20px', display: 'flex', alignItems: 'center', gap: 16, height: 60 }}>
+        <div style={{ maxWidth: 1400, margin: '0 auto', padding: '0 20px', display: 'flex', alignItems: 'center', gap: 16, height: 60 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginRight: 4, flexShrink: 0 }}>
             <div style={{ width: 32, height: 32, background: 'rgba(74,222,128,0.15)', border: '1px solid rgba(74,222,128,0.3)', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <Sprout size={17} color="var(--accent)" />
             </div>
-            <span style={{ fontWeight: 700, fontSize: 15 }}>FarmMarket</span>
+            <span style={{ fontWeight: 700, fontSize: 15 }}>AgroVision</span>
           </div>
 
           <nav style={{ display: 'flex', gap: 2, flex: 1, overflowX: 'auto' }}>
@@ -121,6 +122,7 @@ export default function App() {
               }}>
                 <Icon size={14} />{label}
                 {id === 'scan' && <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--accent)', opacity: 0.8 }} />}
+                {id === 'agrobot' && <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#60a5fa', opacity: 0.8 }} />}
               </button>
             ))}
           </nav>
@@ -173,6 +175,8 @@ export default function App() {
         {page === 'market' && <Marketplace />}
         {page === 'map' && <FarmMap />}
         {page === 'scan' && <DiagnosisPage user={user} />}
+        {page === 'fieldlog' && <FieldLogPage user={user} />}
+        {page === 'agrobot' && <AgroBotPage />}
         {page === 'seller' && <SellerDashboard />}
         {page === 'admin' && <AdminPanel />}
       </main>

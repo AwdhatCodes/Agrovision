@@ -44,7 +44,7 @@ export default function AuthPage({ onAuth }) {
           <div style={{ width: 56, height: 56, background: 'rgba(74,222,128,0.12)', border: '1.5px solid rgba(74,222,128,0.35)', borderRadius: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 14px' }}>
             <Sprout size={28} color="#4ade80" />
           </div>
-          <h1 style={{ fontSize: 26, fontWeight: 700, marginBottom: 4 }}>FarmMarket</h1>
+          <h1 style={{ fontSize: 26, fontWeight: 700, marginBottom: 4 }}>AgroVision</h1>
           <p style={{ color: 'var(--text3)', fontSize: 14 }}>Potato disease-aware marketplace</p>
         </div>
 
@@ -54,7 +54,7 @@ export default function AuthPage({ onAuth }) {
             {mode === 'login' ? 'Sign in' : 'Create account'}
           </h2>
           <p style={{ color: 'var(--text3)', fontSize: 13, textAlign: 'center', marginBottom: 28 }}>
-            {mode === 'login' ? 'to continue to FarmMarket' : 'to join FarmMarket'}
+            {mode === 'login' ? 'to continue to AgroVision' : 'to join AgroVision'}
           </p>
 
           <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
