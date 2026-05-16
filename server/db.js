@@ -9,6 +9,16 @@ db.pragma('journal_mode = WAL')
 db.pragma('foreign_keys = ON')
 
 db.exec(`
+  CREATE TABLE IF NOT EXISTS users (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    email TEXT UNIQUE NOT NULL,
+    password_hash TEXT NOT NULL,
+    role TEXT DEFAULT 'buyer' CHECK(role IN ('buyer', 'farmer', 'admin')),
+    avatar_color TEXT DEFAULT '#4ade80',
+    created_at TEXT DEFAULT (datetime('now'))
+  );
+
   CREATE TABLE IF NOT EXISTS farms (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
@@ -21,6 +31,7 @@ db.exec(`
     lng REAL DEFAULT 0,
     owner_email TEXT,
     owner_phone TEXT,
+    user_id TEXT,
     created_at TEXT DEFAULT (datetime('now'))
   );
 
@@ -100,6 +111,19 @@ db.exec(`
     FOREIGN KEY (product_id) REFERENCES products(id),
     FOREIGN KEY (farm_id) REFERENCES farms(id)
   );
+
+  CREATE TABLE IF NOT EXISTS disease_scans (
+    id TEXT PRIMARY KEY,
+    user_id TEXT,
+    farm_id TEXT,
+    image_url TEXT,
+    disease_result TEXT NOT NULL,
+    confidence REAL NOT NULL,
+    severity TEXT NOT NULL,
+    affected_area_pct REAL DEFAULT 0,
+    notes TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+  );
 `)
 
 const addCol = (table, col, def) => {
@@ -111,6 +135,7 @@ addCol('farms', 'lng', 'REAL DEFAULT 0')
 addCol('farms', 'owner_email', 'TEXT')
 addCol('farms', 'owner_phone', 'TEXT')
 addCol('farms', 'certified_clean', 'INTEGER DEFAULT 0')
+addCol('farms', 'user_id', 'TEXT')
 addCol('products', 'quarantined', 'INTEGER DEFAULT 0')
 addCol('products', 'disease_type', 'TEXT DEFAULT "none"')
 addCol('products', 'views', 'INTEGER DEFAULT 0')
@@ -174,18 +199,18 @@ const seedData = db.transaction(() => {
 
   const insertSale = db.prepare(`INSERT OR IGNORE INTO sales (id, product_id, farm_id, quantity, revenue, buyer_region, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`)
   const salesData = [
-    ['sale-1','prod-1','farm-1', 20, 250.00,'Southern Region','2026-01-10'],
-    ['sale-2','prod-1','farm-1', 35, 437.50,'Eastern Region','2026-02-05'],
-    ['sale-3','prod-1','farm-1', 10, 125.00,'Northern Region','2026-03-14'],
-    ['sale-4','prod-1','farm-1',  5,  62.50,'Western Region','2026-04-20'],
-    ['sale-5','prod-3','farm-3', 30, 262.50,'Southern Region','2026-01-15'],
-    ['sale-6','prod-3','farm-3', 25, 218.75,'Northern Region','2026-02-22'],
-    ['sale-7','prod-3','farm-3', 40, 350.00,'Eastern Region','2026-03-30'],
-    ['sale-8','prod-5','farm-1', 15, 330.00,'Southern Region','2026-02-12'],
-    ['sale-9','prod-5','farm-1', 20, 440.00,'Eastern Region','2026-04-01'],
-    ['sale-10','prod-2','farm-2', 10, 450.00,'Northern Region','2026-01-28'],
-    ['sale-11','prod-2','farm-2',  8, 360.00,'Western Region','2026-03-08'],
-    ['sale-12','prod-4','farm-3', 50, 300.00,'Southern Region','2026-04-15'],
+    ['sale-1','prod-1','farm-1',20,250.00,'Southern Region','2026-01-10'],
+    ['sale-2','prod-1','farm-1',35,437.50,'Eastern Region','2026-02-05'],
+    ['sale-3','prod-1','farm-1',10,125.00,'Northern Region','2026-03-14'],
+    ['sale-4','prod-1','farm-1', 5, 62.50,'Western Region','2026-04-20'],
+    ['sale-5','prod-3','farm-3',30,262.50,'Southern Region','2026-01-15'],
+    ['sale-6','prod-3','farm-3',25,218.75,'Northern Region','2026-02-22'],
+    ['sale-7','prod-3','farm-3',40,350.00,'Eastern Region','2026-03-30'],
+    ['sale-8','prod-5','farm-1',15,330.00,'Southern Region','2026-02-12'],
+    ['sale-9','prod-5','farm-1',20,440.00,'Eastern Region','2026-04-01'],
+    ['sale-10','prod-2','farm-2',10,450.00,'Northern Region','2026-01-28'],
+    ['sale-11','prod-2','farm-2', 8,360.00,'Western Region','2026-03-08'],
+    ['sale-12','prod-4','farm-3',50,300.00,'Southern Region','2026-04-15'],
   ]
   salesData.forEach(s => insertSale.run(...s))
 })
