@@ -97,6 +97,30 @@ function ResultCard({ result, onReset }) {
           </button>
         </div>
       </div>
+      {/* --- NEW AI GRAD-CAM X-RAY HEATMAP --- */}
+      {result.heatmap && (
+        <div className="card" style={{ overflow: 'hidden', padding: 0, border: `2px solid ${info.color}40` }}>
+          <div style={{ padding: '12px 18px', background: 'var(--bg3)', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Zap size={16} color={info.color} />
+            <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text1)' }}>
+              AI X-Ray Vision (Grad-CAM)
+            </span>
+          </div>
+          <div style={{ position: 'relative', background: '#000' }}>
+            <img 
+              src={result.heatmap} 
+              alt="AI Diagnostic Heatmap" 
+              style={{ width: '100%', maxHeight: 380, objectFit: 'contain', display: 'block' }} 
+            />
+            <div style={{ position: 'absolute', bottom: 12, left: 16, background: 'rgba(0,0,0,0.7)', padding: '4px 10px', borderRadius: 6 }}>
+              <p style={{ fontSize: 11, fontWeight: 600, color: '#fff', margin: 0 }}>
+                Highlighting affected pixel clusters
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* -------------------------------------- */}
 
       {[
         { key: 'symptoms', label: 'Symptoms Detected', icon: <AlertTriangle size={14} />, items: info.symptoms, color: '#f59e0b' },
