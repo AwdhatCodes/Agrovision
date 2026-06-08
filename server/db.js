@@ -3,7 +3,7 @@ import { fileURLToPath } from 'url'
 import { dirname, join } from 'path'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
-const db = new Database(join(__dirname, 'marketplace.db'))
+const db = new Database(join(__dirname, 'store.db'))
 
 db.pragma('journal_mode = WAL')
 db.pragma('foreign_keys = ON')
@@ -154,6 +154,7 @@ addCol('users', 'buyer_location', 'TEXT')
 addCol('products', 'quarantined', 'INTEGER DEFAULT 0')
 addCol('products', 'disease_type', 'TEXT DEFAULT "none"')
 addCol('products', 'views', 'INTEGER DEFAULT 0')
+addCol('products', 'description', 'TEXT DEFAULT ""')
 addCol('region_disease_risk', 'blight_type', 'TEXT DEFAULT "none"')
 addCol('disease_alerts', 'blight_type', 'TEXT DEFAULT "early_blight"')
 addCol('sales', 'buyer_name', 'TEXT')

@@ -1,5 +1,7 @@
-import React, { useState, useEffect } from 'react'
-import { Check, X, ShieldCheck, Leaf, MapPin, Package, Clock, Archive, AlertTriangle, Lock, Unlock, Zap, Bell, Award, Star, Trash2 } from 'lucide-react'
+import React, { useState, useEffect, useMemo } from 'react'
+import { MapContainer, TileLayer, Circle, Popup } from 'react-leaflet'
+import 'leaflet/dist/leaflet.css'
+import { Check, X, ShieldCheck, Leaf, MapPin, Package, Clock, Archive, AlertTriangle, Zap, Bell, Award, Star, Trash2, Plus, Pencil } from 'lucide-react'
 
 const RISK_COLORS = { safe: '#4ade80', watch: '#fbbf24', outbreak: '#f87171' }
 const RISK_BG = { safe: 'rgba(74,222,128,0.12)', watch: 'rgba(251,191,36,0.12)', outbreak: 'rgba(248,113,113,0.12)' }
@@ -16,57 +18,22 @@ function StatCard({ label, value, icon: Icon, color }) {
   )
 }
 
-function ApprovalsTab({ pending, acting, approve, reject }) {
-  return (
-    <div>
-      <h2 style={{ fontSize: 15, fontWeight: 600, marginBottom: 14, display: 'flex', alignItems: 'center', gap: 7 }}>
-        <Clock size={15} color="var(--warning)" /> Pending Approval {pending.length > 0 && <span className="badge badge-yellow">{pending.length}</span>}
-      </h2>
-      {pending.length === 0 ? (
-        <div className="card" style={{ padding: 44, textAlign: 'center' }}>
-          <ShieldCheck size={36} style={{ margin: '0 auto 10px', display: 'block', opacity: 0.3 }} />
-          <p style={{ fontWeight: 600, marginBottom: 3 }}>All caught up!</p>
-          <p style={{ color: 'var(--text3)', fontSize: 13 }}>No products waiting for review.</p>
-        </div>
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {pending.map(p => (
-            <div key={p.id} className="card" style={{ padding: '15px 18px', display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
-              <div style={{ width: 50, height: 50, borderRadius: 9, background: 'var(--bg3)', flexShrink: 0, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                {p.image_url ? <img src={p.image_url} alt={p.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <Leaf size={20} style={{ opacity: 0.3 }} />}
-              </div>
-              <div style={{ flex: 1, minWidth: 200 }}>
-                <p style={{ fontWeight: 600, fontSize: 14, marginBottom: 3 }}>{p.name}</p>
-                <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap', alignItems: 'center' }}>
-                  <span className={`tag tag-${p.category}`} style={{ fontSize: 10 }}>{p.category}</span>
-                  {p.disease_type && p.disease_type !== 'none' && <span style={{ fontSize: 10, background: 'rgba(248,113,113,0.1)', color: '#f87171', padding: '2px 6px', borderRadius: 4 }}>{BLIGHT_LABELS[p.disease_type]}</span>}
-                  <span style={{ fontSize: 11, color: 'var(--text3)', display: 'flex', alignItems: 'center', gap: 3 }}><MapPin size={9} /> {p.farm_name} — {p.region}</span>
-                </div>
-              </div>
-              <div style={{ textAlign: 'right', minWidth: 90 }}>
-                <p style={{ fontWeight: 700, color: 'var(--accent)', fontSize: 17 }}>KSh {Number(p.price).toLocaleString()}</p>
-                <p style={{ fontSize: 11, color: 'var(--text3)' }}>Qty: {p.quantity}</p>
-              </div>
-              <div style={{ display: 'flex', gap: 7 }}>
-                <button className="btn btn-primary" onClick={() => approve(p.id)} disabled={!!acting[p.id]} style={{ padding: '7px 13px', fontSize: 13 }}>
-                  {acting[p.id] === 'approving' ? <span className="spinner" style={{ width: 13, height: 13 }} /> : <Check size={14} />} Approve
-                </button>
-                <button className="btn btn-danger" onClick={() => reject(p.id)} disabled={!!acting[p.id]} style={{ padding: '7px 13px', fontSize: 13 }}>
-                  {acting[p.id] === 'rejecting' ? <span className="spinner" style={{ width: 13, height: 13 }} /> : <X size={14} />} Reject
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  )
-}
-
-function DiseaseTab({ regions, onUpdate }) {
+function DiseaseTab({ regions, farms, onUpdate }) {
   const [selected, setSelected] = useState(null)
   const [form, setForm] = useState({ risk_level: 'safe', detection_count: 0, blight_type: 'none' })
   const [saving, setSaving] = useState(false)
+
+  const center = useMemo(() => {
+    const coords = farms
+      .filter(f => Number.isFinite(Number(f.lat)) && Number.isFinite(Number(f.lng)))
+      .map(f => [Number(f.lat), Number(f.lng)])
+    if (!coords.length) return [0.0236, 37.9062]
+    const avgLat = coords.reduce((sum, [lat]) => sum + lat, 0) / coords.length
+    const avgLng = coords.reduce((sum, [, lng]) => sum + lng, 0) / coords.length
+    return [avgLat, avgLng]
+  }, [farms])
+
+  const farmsWithLocation = farms.filter(f => Number.isFinite(Number(f.lat)) && Number.isFinite(Number(f.lng)))
 
   const openEdit = r => { setSelected(r.region); setForm({ risk_level: r.risk_level, detection_count: r.detection_count, blight_type: r.blight_type || 'none' }) }
 
@@ -79,20 +46,68 @@ function DiseaseTab({ regions, onUpdate }) {
   return (
     <div>
       <h2 style={{ fontSize: 15, fontWeight: 600, marginBottom: 14, display: 'flex', alignItems: 'center', gap: 7 }}><Zap size={15} color="var(--warning)" /> Potato Blight Heat Map</h2>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(230px, 1fr))', gap: 12, marginBottom: 8 }}>
-        {regions.map(r => (
-          <div key={r.region} className="card" style={{ padding: '13px 15px', borderColor: `${RISK_COLORS[r.risk_level]}35` }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 7 }}>
-              <span style={{ fontWeight: 600, fontSize: 13 }}>{r.region}</span>
-              <span style={{ fontSize: 10, padding: '2px 9px', borderRadius: 99, background: RISK_BG[r.risk_level], color: RISK_COLORS[r.risk_level], border: `1px solid ${RISK_COLORS[r.risk_level]}25`, fontWeight: 600, textTransform: 'capitalize' }}>{r.risk_level}</span>
+      <div style={{ display: 'grid', gridTemplateColumns: '1.8fr 1fr', gap: 12, marginBottom: 16 }}>
+        <div style={{ height: 400, borderRadius: 18, overflow: 'hidden', border: '1px solid var(--border)', background: 'var(--bg2)' }}>
+          {!farms || farms.length === 0 ? (
+            <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text3)' }}>
+              <p style={{ fontSize: 13 }}>No farms with location data</p>
             </div>
-            <div style={{ fontSize: 11, color: 'var(--text3)', marginBottom: 8 }}>
-              {r.detection_count} detections · {r.blight_type && r.blight_type !== 'none' ? BLIGHT_LABELS[r.blight_type] : 'No blight'}
+          ) : (
+            <MapContainer key={`map-${center.join('-')}`} center={center} zoom={6} scrollWheelZoom={true} style={{ width: '100%', height: '100%' }} attributionControl={true}>
+              <TileLayer
+                url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+                attribution="&copy; OpenStreetMap contributors &copy; CARTO"
+              />
+              {farmsWithLocation.map(farm => (
+                <Circle
+                  key={`circle-${farm.id}`}
+                  center={[Number(farm.lat), Number(farm.lng)]}
+                  radius={Math.max(1500, Math.min(30000, (farm.detection_count || 1) * 4000))}
+                  pathOptions={{
+                    color: RISK_COLORS[farm.risk_level] || '#4ade80',
+                    fillColor: RISK_COLORS[farm.risk_level] || '#4ade80',
+                    fillOpacity: 0.2,
+                    weight: 2,
+                  }}
+                >
+                  <Popup>
+                    <div style={{ minWidth: 200, fontSize: 12 }}>
+                      <strong style={{ display: 'block', marginBottom: 6 }}>{farm.name || 'Farm'}</strong>
+                      <div style={{ marginBottom: 3 }}><strong>Region:</strong> {farm.region || 'Unknown'}</div>
+                      <div style={{ marginBottom: 3 }}><strong>Risk:</strong> <span style={{ color: RISK_COLORS[farm.risk_level] || '#4ade80', fontWeight: 600 }}>{(farm.risk_level || 'safe').toUpperCase()}</span></div>
+                      <div><strong>Detections:</strong> {farm.detection_count || 0}</div>
+                    </div>
+                  </Popup>
+                </Circle>
+              ))}
+            </MapContainer>
+          )}
+        </div>
+
+        <div>
+          <div style={{ marginBottom: 12, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+            <div>
+              <p style={{ fontSize: 13, fontWeight: 700, margin: 0 }}>Region risk overview</p>
+              <p style={{ fontSize: 11, color: 'var(--text3)', margin: '6px 0 0' }}>Update risk levels and keep the map synced.</p>
             </div>
-            <button className="btn btn-secondary" style={{ padding: '4px 10px', fontSize: 11, width: '100%' }} onClick={() => openEdit(r)}>Update Risk</button>
           </div>
-        ))}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(230px, 1fr))', gap: 12, maxHeight: 400, overflowY: 'auto' }}>
+            {regions.map(r => (
+              <div key={r.region} className="card" style={{ padding: '13px 15px', borderColor: `${RISK_COLORS[r.risk_level]}35` }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 7 }}>
+                  <span style={{ fontWeight: 600, fontSize: 13 }}>{r.region}</span>
+                  <span style={{ fontSize: 10, padding: '2px 9px', borderRadius: 99, background: RISK_BG[r.risk_level], color: RISK_COLORS[r.risk_level], border: `1px solid ${RISK_COLORS[r.risk_level]}25`, fontWeight: 600, textTransform: 'capitalize' }}>{r.risk_level}</span>
+                </div>
+                <div style={{ fontSize: 11, color: 'var(--text3)', marginBottom: 8 }}>
+                  {r.detection_count} detections · {r.blight_type && r.blight_type !== 'none' ? BLIGHT_LABELS[r.blight_type] : 'No blight'}
+                </div>
+                <button className="btn btn-secondary" style={{ padding: '4px 10px', fontSize: 11, width: '100%' }} onClick={() => openEdit(r)}>Update Risk</button>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
+
       {selected && (
         <div className="modal-overlay" onClick={e => e.target === e.currentTarget && setSelected(null)}>
           <div className="modal" style={{ maxWidth: 400 }}>
@@ -118,7 +133,7 @@ function DiseaseTab({ regions, onUpdate }) {
                 <div style={{ padding: '9px 13px', background: 'rgba(251,191,36,0.07)', border: '1px solid rgba(251,191,36,0.2)', borderRadius: 7, fontSize: 12, color: 'var(--text2)' }}>
                   <strong style={{ color: 'var(--warning)' }}>Auto-actions:</strong>
                   <ul style={{ marginTop: 4, paddingLeft: 14 }}>
-                    <li>Disease alert created + email/SMS (simulated)</li>
+                    <li>Disease alert created (simulated)</li>
                     {form.risk_level === 'outbreak' && <li style={{ color: 'var(--danger)', marginTop: 3 }}>All listings in region quarantined</li>}
                   </ul>
                 </div>
@@ -126,7 +141,7 @@ function DiseaseTab({ regions, onUpdate }) {
             </div>
             <div className="modal-footer">
               <button className="btn btn-secondary" onClick={() => setSelected(null)}>Cancel</button>
-              <button className="btn btn-primary" onClick={save} disabled={saving}>{saving ? <span className="spinner" style={{ width: 13, height: 13 }} /> : null} Apply</button>
+              <button className="btn btn-primary" onClick={save} disabled={saving}>{saving ? <span className="spinner" style={{ width: 13, height: 13 }} /> : 'Apply'}</button>
             </div>
           </div>
         </div>
@@ -165,8 +180,8 @@ function CertificationTab({ onUpdate }) {
 
   return (
     <div>
-      <h2 style={{ fontSize: 15, fontWeight: 600, marginBottom: 14, display: 'flex', alignItems: 'center', gap: 7 }}><Award size={15} color="var(--accent)" /> Disease-Free Certification</h2>
-      <p style={{ fontSize: 13, color: 'var(--text3)', marginBottom: 18 }}>Farms that pass the AI potato blight scan receive a "Certified Clean" badge on all their listings. Certification is auto-revoked when blight is detected.</p>
+      <h2 style={{ fontSize: 15, fontWeight: 600, marginBottom: 14, display: 'flex', alignItems: 'center', gap: 7 }}><Award size={15} color="var(--accent)" /> Farm Certification</h2>
+      <p style={{ fontSize: 13, color: 'var(--text3)', marginBottom: 18 }}>Farms that pass the AI potato blight scan are marked as certified clean at the farm level only. This status applies to the farm, not individual products. Certification is auto-revoked when blight is detected.</p>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 28 }}>
         {farms.map(f => (
@@ -224,7 +239,7 @@ function CertificationTab({ onUpdate }) {
                   <option value="early_blight">Early Blight</option><option value="late_blight">Late Blight</option>
                 </select>
               </div>
-              <p style={{ fontSize: 12, color: 'var(--text2)' }}>This will remove the Certified Clean badge and flag all listings from this farm.</p>
+              <p style={{ fontSize: 12, color: 'var(--text2)' }}>This will remove the farm's Certified Clean status.</p>
             </div>
             <div className="modal-footer">
               <button className="btn btn-secondary" onClick={() => setRevokeModal(null)}>Cancel</button>
@@ -237,54 +252,205 @@ function CertificationTab({ onUpdate }) {
   )
 }
 
-function QuarantineTab({ onUpdate }) {
-  const [products, setProducts] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [acting, setActing] = useState({})
-  const [tab, setTab] = useState('quarantined')
-
-  const load = async () => {
-    setLoading(true)
-    const all = await fetch('/api/products?status=approved').then(r => r.json())
-    setProducts(all); setLoading(false)
+function CertifiedFarmsTab({ farms }) {
+  const certified = farms.filter(f => f.certified_clean === 1)
+  const notCertified = farms.filter(f => f.certified_clean !== 1)
+  
+  const getBlightBadge = (farm) => {
+    if (!farm.risk_level || farm.risk_level === 'safe') return null
+    const isOutbreak = farm.risk_level === 'outbreak'
+    const color = isOutbreak ? '#f87171' : '#fbbf24'
+    const bgColor = isOutbreak ? 'rgba(248,113,113,0.1)' : 'rgba(251,191,36,0.1)'
+    const label = isOutbreak ? 'Outbreak' : 'Watch'
+    const blightLabel = farm.blight_type && farm.blight_type !== 'none' ? BLIGHT_LABELS[farm.blight_type] : 'Unknown'
+    
+    return (
+      <span style={{ fontSize: 10, color, background: bgColor, padding: '3px 8px', borderRadius: 4, fontWeight: 600 }}>
+        {label} · {blightLabel}
+      </span>
+    )
   }
-  useEffect(() => { load() }, [])
-
-  const quarantine = async id => { setActing(a => ({...a,[id]:true})); await fetch(`/api/products/${id}/quarantine`,{method:'PATCH'}); setActing(a => ({...a,[id]:false})); load(); onUpdate() }
-  const unquarantine = async id => { setActing(a => ({...a,[id]:true})); await fetch(`/api/products/${id}/unquarantine`,{method:'PATCH'}); setActing(a => ({...a,[id]:false})); load(); onUpdate() }
-
-  const shown = tab === 'quarantined' ? products.filter(p => p.quarantined===1) : products.filter(p => p.quarantined===0)
 
   return (
     <div>
-      <h2 style={{ fontSize: 15, fontWeight: 600, marginBottom: 14, display: 'flex', alignItems: 'center', gap: 7 }}><Lock size={15} color="var(--danger)" /> Quarantine Control</h2>
-      <div style={{ display: 'flex', gap: 4, marginBottom: 14, borderBottom: '1px solid var(--border)' }}>
-        {[['quarantined',`Quarantined (${products.filter(p=>p.quarantined===1).length})`],['active',`Active (${products.filter(p=>p.quarantined===0).length})`]].map(([id,label]) => (
-          <button key={id} onClick={() => setTab(id)} style={{ padding: '7px 14px', background: 'none', border: 'none', borderBottom: tab===id ? '2px solid var(--danger)' : '2px solid transparent', color: tab===id ? 'var(--danger)' : 'var(--text2)', fontWeight: tab===id ? 600 : 400, fontSize: 12, cursor: 'pointer', marginBottom: -1 }}>{label}</button>
-        ))}
-      </div>
-      {loading ? <div style={{ textAlign: 'center', padding: 40 }}><div className="spinner" style={{ margin: '0 auto' }} /></div> : shown.length === 0 ? (
-        <div className="card" style={{ padding: 28, textAlign: 'center', color: 'var(--text3)', fontSize: 13 }}>{tab === 'quarantined' ? 'No quarantined products' : 'No active products'}</div>
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {shown.map(p => (
-            <div key={p.id} className="card" style={{ padding: '11px 16px', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', borderColor: p.quarantined ? 'rgba(248,113,113,0.3)' : 'var(--border)' }}>
-              <div style={{ width: 42, height: 42, borderRadius: 7, background: 'var(--bg3)', flexShrink: 0, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                {p.image_url ? <img src={p.image_url} style={{ width:'100%',height:'100%',objectFit:'cover' }} /> : <Leaf size={16} style={{ opacity: 0.3 }} />}
-              </div>
-              <div style={{ flex: 1, minWidth: 180 }}>
-                <p style={{ fontWeight: 600, fontSize: 13, marginBottom: 2 }}>{p.name}</p>
-                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
-                  <span className={`tag tag-${p.category}`} style={{ fontSize: 10 }}>{p.category}</span>
-                  <span style={{ fontSize: 11, color: 'var(--text3)', display: 'flex', alignItems: 'center', gap: 3 }}><MapPin size={9} />{p.farm_name} · {p.region}</span>
+      <h2 style={{ fontSize: 15, fontWeight: 600, marginBottom: 14, display: 'flex', alignItems: 'center', gap: 7 }}><Award size={15} color="var(--accent)" /> Certified Farms Status</h2>
+      <p style={{ fontSize: 13, color: 'var(--text3)', marginBottom: 20 }}>Overview of farm certification status and active blight issues.</p>
+
+      {certified.length > 0 && (
+        <div style={{ marginBottom: 28 }}>
+          <h3 style={{ fontSize: 13, fontWeight: 700, marginBottom: 12, color: 'var(--accent)', display: 'flex', alignItems: 'center', gap: 6 }}>
+            <ShieldCheck size={14} /> Certified Clean — {certified.length}
+          </h3>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 12 }}>
+            {certified.map(f => (
+              <div key={f.id} className="card" style={{ padding: '14px 16px', borderColor: 'rgba(74,222,128,0.3)', background: 'rgba(74,222,128,0.02)' }}>
+                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 8 }}>
+                  <div>
+                    <p style={{ fontWeight: 600, fontSize: 13, marginBottom: 2 }}>{f.name}</p>
+                    <span style={{ fontSize: 11, color: 'var(--text3)', display: 'flex', alignItems: 'center', gap: 3 }}><MapPin size={10} />{f.region}</span>
+                  </div>
+                  <span style={{ fontSize: 10, padding: '3px 8px', borderRadius: 99, background: 'rgba(74,222,128,0.15)', color: 'var(--accent)', fontWeight: 600, whiteSpace: 'nowrap' }}>✓ Certified</span>
+                </div>
+                <div style={{ padding: '8px 0', borderTop: '1px solid rgba(74,222,128,0.1)', marginBottom: 8, paddingTop: 8 }}>
+                  <p style={{ fontSize: 10, color: 'var(--text3)', marginBottom: 4 }}>Current risk: <strong style={{ color: f.risk_level === 'safe' ? 'var(--accent)' : 'var(--warning)' }}>{f.risk_level || 'safe'}</strong></p>
+                  {f.detection_count > 0 && <p style={{ fontSize: 10, color: 'var(--text3)' }}>{f.detection_count} detection{f.detection_count > 1 ? 's' : ''} on record</p>}
                 </div>
               </div>
-              <span style={{ fontWeight: 700, color: p.quarantined ? 'var(--text3)' : 'var(--accent)', fontSize: 13 }}>KSh {Number(p.price).toLocaleString()}</span>
-              {p.quarantined===1 ? (
-                <button className="btn btn-secondary" style={{ padding:'5px 11px',fontSize:12 }} onClick={() => unquarantine(p.id)} disabled={acting[p.id]}><Unlock size={11}/> Release</button>
-              ) : (
-                <button className="btn btn-danger" style={{ padding:'5px 11px',fontSize:12 }} onClick={() => quarantine(p.id)} disabled={acting[p.id]}><Lock size={11}/> Quarantine</button>
-              )}
+            ))}
+          </div>
+        </div>
+      )}
+
+      {notCertified.length > 0 && (
+        <div style={{ marginBottom: 28 }}>
+          <h3 style={{ fontSize: 13, fontWeight: 700, marginBottom: 12, color: 'var(--text2)', display: 'flex', alignItems: 'center', gap: 6 }}>
+            <Leaf size={14} /> Not Certified — {notCertified.length}
+          </h3>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 12 }}>
+            {notCertified.map(f => {
+              const hasBlight = getBlightBadge(f)
+              const blightColor = f.risk_level === 'outbreak' ? 'rgba(248,113,113,0.02)' : f.risk_level === 'watch' ? 'rgba(251,191,36,0.02)' : 'var(--bg3)'
+              const borderColor = f.risk_level === 'outbreak' ? 'rgba(248,113,113,0.2)' : f.risk_level === 'watch' ? 'rgba(251,191,36,0.2)' : 'var(--border)'
+              
+              return (
+                <div key={f.id} className="card" style={{ padding: '14px 16px', background: blightColor, borderColor }}>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 8 }}>
+                    <div>
+                      <p style={{ fontWeight: 600, fontSize: 13, marginBottom: 2 }}>{f.name}</p>
+                      <span style={{ fontSize: 11, color: 'var(--text3)', display: 'flex', alignItems: 'center', gap: 3 }}><MapPin size={10} />{f.region}</span>
+                    </div>
+                    <span style={{ fontSize: 10, padding: '3px 8px', borderRadius: 99, background: 'rgba(100,116,139,0.2)', color: 'var(--text3)', fontWeight: 600, whiteSpace: 'nowrap' }}>Not Certified</span>
+                  </div>
+                  <div style={{ padding: '8px 0', borderTop: `1px solid ${borderColor}`, marginBottom: 8, paddingTop: 8 }}>
+                    {hasBlight ? (
+                      <div>
+                        <p style={{ fontSize: 10, color: 'var(--text3)', marginBottom: 6 }}>Status: {hasBlight}</p>
+                      </div>
+                    ) : (
+                      <p style={{ fontSize: 10, color: 'var(--accent)', fontWeight: 500 }}>✓ Ready for certification</p>
+                    )}
+                    {f.detection_count > 0 && <p style={{ fontSize: 10, color: 'var(--text3)', marginTop: 4 }}>{f.detection_count} detection{f.detection_count > 1 ? 's' : ''}</p>}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
+      {farms.length === 0 && (
+        <div className="card" style={{ padding: 32, textAlign: 'center' }}>
+          <Award size={36} style={{ margin: '0 auto 12px', display: 'block', color: 'var(--text3)' }} />
+          <p style={{ fontWeight: 600, color: 'var(--text2)', marginBottom: 6 }}>No farms available</p>
+        </div>
+      )}
+    </div>
+  )
+}
+
+const STORE_BLIGHT_TYPES = ['early_blight', 'late_blight']
+
+function productStatusBadge(status) {
+  if (status === 'approved') return <span className="badge badge-green" style={{ fontSize: 10 }}>Live</span>
+  if (status === 'pending') return <span className="badge badge-yellow" style={{ fontSize: 10 }}>Pending</span>
+  if (status === 'archived') return <span className="badge badge-gray" style={{ fontSize: 10 }}>Archived</span>
+  return null
+}
+
+function ProductsTab({ onEdit, onAdd }) {
+  const [products, setProducts] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [acting, setActing] = useState({})
+
+  const load = async () => {
+    setLoading(true)
+    const statuses = ['approved', 'pending', 'archived']
+    const lists = await Promise.all(statuses.map(s => fetch(`/api/products?status=${s}&category=fertiliser`).then(r => r.json())))
+    const merged = lists.flat().filter(p => STORE_BLIGHT_TYPES.includes(p.disease_type))
+    const byId = new Map()
+    merged.forEach(p => byId.set(p.id, p))
+    setProducts([...byId.values()].sort((a, b) => (b.created_at || '').localeCompare(a.created_at || '')))
+    setLoading(false)
+  }
+
+  useEffect(() => { load() }, [])
+
+  const deleteProduct = async (id) => {
+    if (!window.confirm('Delete this product permanently?')) return
+    setActing(a => ({ ...a, [id]: true }))
+    await fetch(`/api/products/${id}`, { method: 'DELETE' })
+    setActing(a => ({ ...a, [id]: false }))
+    load()
+  }
+
+  const approve = async (id) => {
+    setActing(a => ({ ...a, [id]: true }))
+    await fetch(`/api/products/${id}/approve`, { method: 'PATCH' })
+    setActing(a => ({ ...a, [id]: false }))
+    load()
+  }
+
+  const archiveProduct = async (id) => {
+    if (!window.confirm('Archive this product? It will be hidden from the store.')) return
+    setActing(a => ({ ...a, [id]: true }))
+    await fetch(`/api/products/${id}/archive`, { method: 'PATCH' })
+    setActing(a => ({ ...a, [id]: false }))
+    load()
+  }
+
+  return (
+    <div>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 14, flexWrap: 'wrap' }}>
+        <h2 style={{ fontSize: 15, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 7 }}><Package size={15} color="var(--accent)" /> Store Products</h2>
+        <button type="button" className="btn btn-primary" onClick={onAdd} style={{ fontSize: 13, padding: '8px 14px', flexShrink: 0 }}>
+          <Plus size={14} /> Add Product
+        </button>
+      </div>
+      <p style={{ fontSize: 13, color: 'var(--text3)', marginBottom: 16 }}>Fungicides for Early and Late Blight. Edit listings shown in the farmer Store.</p>
+      {loading ? (
+        <div style={{ textAlign: 'center', padding: 40 }}><div className="spinner" style={{ margin: '0 auto' }} /></div>
+      ) : products.length === 0 ? (
+        <div className="card" style={{ padding: 32, textAlign: 'center' }}>
+          <Package size={36} style={{ margin: '0 auto 12px', display: 'block', color: 'var(--text3)' }} />
+          <p style={{ fontWeight: 600, color: 'var(--text2)', marginBottom: 6 }}>No store products yet</p>
+          <p style={{ fontSize: 13, color: 'var(--text3)', marginBottom: 16 }}>Add fungicides for Early or Late Blight to show them in the Store. Use the Add Product button above.</p>
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {products.map(p => (
+            <div key={p.id} className="card" style={{ padding: '11px 16px', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+              <div style={{ width: 42, height: 42, borderRadius: 7, background: 'var(--bg3)', flexShrink: 0, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                {p.image_url ? <img src={p.image_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <Leaf size={16} style={{ opacity: 0.3 }} />}
+              </div>
+              <div style={{ flex: 1, minWidth: 180 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2, flexWrap: 'wrap' }}>
+                  <p style={{ fontWeight: 600, fontSize: 13 }}>{p.name}</p>
+                  {productStatusBadge(p.status)}
+                  {p.quarantined === 1 && <span className="badge badge-red" style={{ fontSize: 10 }}>Quarantined</span>}
+                </div>
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+                  <span style={{ fontSize: 11, color: 'var(--text3)' }}>{BLIGHT_LABELS[p.disease_type]}</span>
+                  <span style={{ fontSize: 11, color: 'var(--text3)', display: 'flex', alignItems: 'center', gap: 3 }}><MapPin size={9} />{p.farm_name} · {p.region}</span>
+                  <span style={{ fontSize: 11, color: 'var(--text3)' }}>Qty {p.quantity}</span>
+                </div>
+              </div>
+              <span style={{ fontWeight: 700, color: 'var(--accent)', fontSize: 13 }}>KSh {Number(p.price).toLocaleString()}</span>
+              <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                <button type="button" className="btn btn-secondary" style={{ padding: '5px 11px', fontSize: 12 }} onClick={() => onEdit(p)} disabled={acting[p.id]}>
+                  <Pencil size={11} /> Edit
+                </button>
+                {p.status === 'pending' && (
+                  <button type="button" className="btn btn-primary" style={{ padding: '5px 11px', fontSize: 12 }} onClick={() => approve(p.id)} disabled={acting[p.id]}>
+                    <Check size={11} /> Approve
+                  </button>
+                )}
+                <button type="button" className="btn btn-ghost" style={{ padding: '5px 11px', fontSize: 12, color: 'var(--danger)' }} onClick={() => archiveProduct(p.id)} disabled={acting[p.id]}>
+                  <Archive size={11} /> Archive
+                </button>
+                <button type="button" className="btn btn-danger" style={{ padding: '5px 11px', fontSize: 12 }} onClick={() => deleteProduct(p.id)} disabled={acting[p.id]}>
+                  <Trash2 size={11} /> Delete
+                </button>
+              </div>
             </div>
           ))}
         </div>
@@ -336,12 +502,13 @@ function ReviewsTab() {
 }
 
 function AlertsTab({ alerts }) {
+  const list = Array.isArray(alerts) ? alerts : []
   return (
     <div>
       <h2 style={{ fontSize: 15, fontWeight: 600, marginBottom: 14, display: 'flex', alignItems: 'center', gap: 7 }}><Bell size={15} color="var(--warning)" /> Blight Alerts</h2>
-      {alerts.length === 0 ? <div className="card" style={{ padding: 36, textAlign: 'center', color: 'var(--text3)' }}>No alerts.</div> : (
+      {list.length === 0 ? <div className="card" style={{ padding: 36, textAlign: 'center', color: 'var(--text3)' }}>No alerts.</div> : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
-          {alerts.map(a => (
+          {list.map(a => (
             <div key={a.id} className="card" style={{ padding: '14px 18px', borderColor: a.severity==='outbreak' ? 'rgba(248,113,113,0.3)' : 'rgba(251,191,36,0.2)' }}>
               <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
                 <div style={{ width: 9, height: 9, borderRadius: '50%', background: a.severity==='outbreak' ? 'var(--danger)' : 'var(--warning)', marginTop: 4, flexShrink: 0 }} />
@@ -351,8 +518,7 @@ function AlertsTab({ alerts }) {
                     <span style={{ fontSize: 11, color: 'var(--text3)' }}>{a.region}</span>
                     <span className={a.severity==='outbreak' ? 'badge badge-red' : 'badge badge-yellow'} style={{ fontSize: 10 }}>{a.severity}</span>
                     {a.blight_type && a.blight_type !== 'none' && <span style={{ fontSize: 10, color: '#f87171', background: 'rgba(248,113,113,0.1)', padding: '2px 7px', borderRadius: 4 }}>{BLIGHT_LABELS[a.blight_type]}</span>}
-                    {a.simulated_email===1 && <span style={{ fontSize: 10, color: 'var(--blue)', background: 'rgba(96,165,250,0.1)', padding: '2px 7px', borderRadius: 4 }}>📧 Email sent</span>}
-                    {a.simulated_sms===1 && <span style={{ fontSize: 10, color: 'var(--accent)', background: 'rgba(74,222,128,0.1)', padding: '2px 7px', borderRadius: 4 }}>📱 SMS sent</span>}
+                    
                     <span style={{ fontSize: 10, color: 'var(--text3)', marginLeft: 'auto' }}>{a.created_at?.slice(0,10)}</span>
                   </div>
                 </div>
@@ -365,54 +531,245 @@ function AlertsTab({ alerts }) {
   )
 }
 
-export default function AdminPanel() {
-  const [pending, setPending] = useState([])
+function ProductFormModal({ farms, values, editing, onChange, onClose, onSubmit, saving, error }) {
+  // Product form for admins: remove farm selection and blight type input from UI
+  const canSubmit = values.name && values.price && values.quantity
+
+  return (
+    <div className="modal-overlay" style={{ zIndex: 200 }} onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="modal" style={{ maxWidth: 460 }} onClick={e => e.stopPropagation()}>
+        <div className="modal-header">
+          <h2 style={{ fontSize: 15, fontWeight: 600 }}>{editing ? 'Edit Store Product' : 'Add Store Product'}</h2>
+          <button type="button" className="btn btn-ghost" onClick={onClose} style={{ padding: '4px 8px' }}><X size={15} /></button>
+        </div>
+        <form onSubmit={onSubmit}>
+          <div className="modal-body">
+            {error && (
+              <div style={{ padding: '12px 14px', background: 'rgba(248,113,113,0.1)', border: '1px solid rgba(248,113,113,0.2)', borderRadius: 8, color: '#b91c1c', fontSize: 13 }}>
+                {error}
+              </div>
+            )}
+
+            <div>
+              <div className="form-group">
+                <label>Product Name</label>
+                <input value={values.name} onChange={e => onChange('name', e.target.value)} placeholder="e.g. Ridomil Gold Fungicide" required />
+              </div>
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Price (KSH)</label>
+                  <input type="number" min="0" step="0.01" value={values.price} onChange={e => onChange('price', e.target.value)} required />
+                </div>
+                <div className="form-group">
+                  <label>Quantity</label>
+                  <input type="number" min="1" value={values.quantity} onChange={e => onChange('quantity', e.target.value)} required />
+                </div>
+              </div>
+              <div className="form-group">
+                <label>Product Photo</label>
+                <input type="file" accept="image/*" onChange={e => {
+                  const file = e.target.files?.[0] || null
+                  onChange('image', file)
+                  onChange('image_url', file ? URL.createObjectURL(file) : '')
+                }} />
+              </div>
+              {(values.image_url || values.image) && (
+                <div style={{ marginTop: 10, borderRadius: 14, overflow: 'hidden', border: '1px solid var(--border)' }}>
+                  <img src={values.image_url} alt="Preview" style={{ width: '100%', height: 160, objectFit: 'cover' }} />
+                </div>
+              )}
+            </div>
+          </div>
+          <div className="modal-footer" style={{ display: 'flex', gap: 10, width: '100%', justifyContent: 'flex-end' }}>
+            <button type="button" className="btn btn-secondary" onClick={onClose} style={{ flex: 1 }}>Cancel</button>
+            <button type="submit" className="btn btn-primary" disabled={saving || !canSubmit} style={{ flex: 1 }}>
+              {saving ? <span className="spinner" style={{ width: 13, height: 13 }} /> : editing ? 'Save Changes' : 'Create Product'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
+export default function AdminPanel({ pendingAction, onActionHandled }) {
   const [stats, setStats] = useState(null)
   const [regions, setRegions] = useState([])
   const [alerts, setAlerts] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [acting, setActing] = useState({})
-  const [tab, setTab] = useState('approvals')
+  const [farms, setFarms] = useState([])
+  const [showProductForm, setShowProductForm] = useState(false)
+  const [editingProduct, setEditingProduct] = useState(null)
+  const [productForm, setProductForm] = useState({ name: '', price: '', quantity: '', farm_id: '', disease_type: 'early_blight', disease_risk_tag: 'low', image: null, image_url: '' })
+  const [productError, setProductError] = useState(null)
+  const [productSaving, setProductSaving] = useState(false)
+  const [productsRefresh, setProductsRefresh] = useState(0)
+  const [statsLoading, setStatsLoading] = useState(true)
+  const [tab, setTab] = useState('products')
 
   const loadData = async () => {
-    setLoading(true)
+    setStatsLoading(true)
     try {
-      const [p, s, r, a] = await Promise.all([
-        fetch('/api/products?status=pending').then(r=>r.json()),
+      const [s, r, a, f] = await Promise.all([
         fetch('/api/stats').then(r=>r.json()),
         fetch('/api/regions/disease-risk').then(r=>r.json()),
         fetch('/api/alerts').then(r=>r.json()),
+        fetch('/api/farms').then(r=>r.json()),
       ])
-      setPending(p); setStats(s); setRegions(r); setAlerts(a)
-    } finally { setLoading(false) }
+      setStats(s); setRegions(r); setAlerts(a); setFarms(f)
+    } finally { setStatsLoading(false) }
   }
   useEffect(() => { loadData() }, [])
 
-  const approve = async id => { setActing(a => ({...a,[id]:'approving'})); await fetch(`/api/products/${id}/approve`,{method:'PATCH'}); setActing(a=>({...a,[id]:null})); loadData() }
-  const reject = async id => { setActing(a => ({...a,[id]:'rejecting'})); await fetch(`/api/products/${id}/reject`,{method:'PATCH'}); setActing(a=>({...a,[id]:null})); loadData() }
+  useEffect(() => {
+    if (!farms.length) return
+    setProductForm(f => (f.farm_id ? f : { ...f, farm_id: farms[0].id }))
+  }, [farms])
 
+  const closeProductForm = () => {
+    setProductError(null)
+    setEditingProduct(null)
+    setShowProductForm(false)
+  }
+
+  const openProductForm = () => {
+    setProductError(null)
+    setEditingProduct(null)
+    setProductForm({
+      name: '',
+      price: '',
+      quantity: '',
+      farm_id: farms[0]?.id || '',
+      disease_type: 'early_blight',
+      disease_risk_tag: 'low',
+      image: null,
+      image_url: '',
+    })
+    setTab('products')
+    setShowProductForm(true)
+  }
+
+  useEffect(() => {
+    if (!pendingAction || !farms.length) return
+    const action = typeof pendingAction === 'string' ? { type: pendingAction } : pendingAction
+    setTab('products')
+    if (action.type === 'add-product') {
+      openProductForm()
+      onActionHandled?.()
+    } else if (action.type === 'edit-product' && action.product) {
+      openProductEdit(action.product)
+      onActionHandled?.()
+    }
+  }, [pendingAction, farms])
+
+  const openProductEdit = (product) => {
+    setProductError(null)
+    setEditingProduct(product)
+    setTab('products')
+    setProductForm({
+      name: product.name || '',
+      price: String(product.price ?? ''),
+      quantity: String(product.quantity ?? ''),
+      farm_id: product.farm_id || farms[0]?.id || '',
+      disease_type: product.disease_type || 'early_blight',
+      disease_risk_tag: product.disease_risk_tag || 'low',
+      image: null,
+      image_url: product.image_url || '',
+    })
+    setShowProductForm(true)
+  }
+
+  const updateProductForm = (key, value) => setProductForm(f => ({ ...f, [key]: value }))
+  const handleProductSubmit = async (e) => {
+    e.preventDefault()
+    const farmId = productForm.farm_id || farms[0]?.id
+    if (!farmId) {
+      setProductError('Select a farm before saving the product.')
+      return
+    }
+    setProductSaving(true)
+    setProductError(null)
+    try {
+      const fd = new FormData()
+      fd.append('name', productForm.name.trim())
+      fd.append('category', 'fertiliser')
+      fd.append('price', productForm.price)
+      fd.append('quantity', productForm.quantity)
+      fd.append('farm_id', farmId)
+      fd.append('disease_risk_tag', productForm.disease_risk_tag || 'none')
+      fd.append('disease_type', productForm.disease_type)
+      if (productForm.image) {
+        fd.append('image', productForm.image)
+      }
+
+      let productId = editingProduct?.id
+      if (editingProduct) {
+        const res = await fetch(`/api/products/${editingProduct.id}`, { method: 'PUT', body: fd })
+        let updated
+        try {
+          updated = await res.json()
+        } catch (parseErr) {
+          const text = await res.text()
+          throw new Error(text || parseErr.message)
+        }
+        if (!res.ok) throw new Error(updated.error || `Update failed (${res.status})`)
+        productId = updated.id || editingProduct.id
+      } else {
+        const res = await fetch('/api/products', { method: 'POST', body: fd })
+        let created
+        try {
+          created = await res.json()
+        } catch (parseErr) {
+          const text = await res.text()
+          throw new Error(text || parseErr.message)
+        }
+        if (!res.ok) throw new Error(created.error || `Create failed (${res.status})`)
+        if (!created.id) throw new Error('Product was created but no ID was returned')
+        productId = created.id
+      }
+
+      const approveRes = await fetch(`/api/products/${productId}/approve`, { method: 'PATCH' })
+      const approved = await approveRes.json()
+      if (!approveRes.ok) {
+        throw new Error(approved.error || `Approve failed (${approveRes.status})`)
+      }
+
+      closeProductForm()
+      setProductForm({ name: '', price: '', quantity: '', farm_id: farms[0]?.id || '', disease_type: 'early_blight' })
+      setProductsRefresh(n => n + 1)
+      loadData()
+    } catch (err) {
+      console.error('Product save error:', err)
+      setProductError(err.message || 'Unable to save product')
+    } finally {
+      setProductSaving(false)
+    }
+  }
+
+  const safeAlerts = Array.isArray(alerts) ? alerts : []
   const TABS = [
-    { id: 'approvals', label: 'Approvals', badge: pending.length },
+    { id: 'products', label: 'Products' },
     { id: 'disease', label: 'Blight Map' },
-    { id: 'certification', label: 'Certification' },
-    { id: 'quarantine', label: 'Quarantine' },
-    { id: 'reviews', label: 'Reviews' },
-    { id: 'alerts', label: 'Alerts', badge: alerts.length },
+    { id: 'certified', label: 'Farms', badge: farms.filter(f => f.certified_clean === 1).length },
+    { id: 'alerts', label: 'Alerts', badge: safeAlerts.length },
   ]
 
   return (
     <div style={{ maxWidth: 1200, margin: '0 auto', padding: '28px 24px' }}>
-      <div style={{ marginBottom: 24 }}>
-        <h1 style={{ fontSize: 27, fontWeight: 700, marginBottom: 4 }}>Admin Panel</h1>
-        <p style={{ color: 'var(--text2)', fontSize: 13 }}>Manage listings, potato blight alerts, and certification</p>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 18, marginBottom: 24, flexWrap: 'wrap' }}>
+        <div>
+          <h1 style={{ fontSize: 27, fontWeight: 700, marginBottom: 4 }}>Admin Panel</h1>
+          <p style={{ color: 'var(--text2)', fontSize: 13 }}>Manage admin store products and potato blight alerts</p>
+        </div>
+        {/* Admin Add Product moved to Products tab */}
       </div>
 
-      {stats && (
+      {statsLoading && !stats ? (
+        <div style={{ textAlign: 'center', padding: '8px 0 20px' }}><div className="spinner" style={{ margin: '0 auto', width: 22, height: 22 }} /></div>
+      ) : stats && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(170px, 1fr))', gap: 12, marginBottom: 24 }}>
           <StatCard label="Live Products" value={stats.total} icon={Package} color="var(--accent)" />
           <StatCard label="Pending" value={stats.pending} icon={Clock} color="var(--warning)" />
           <StatCard label="Certified Farms" value={stats.certified||0} icon={Award} color="var(--accent)" />
-          <StatCard label="Quarantined" value={stats.quarantined||0} icon={Lock} color="var(--danger)" />
           <StatCard label="Outbreaks" value={stats.outbreaks||0} icon={AlertTriangle} color="var(--danger)" />
           <StatCard label="Archived" value={stats.archived} icon={Archive} color="var(--text3)" />
         </div>
@@ -420,23 +777,29 @@ export default function AdminPanel() {
 
       <div style={{ display: 'flex', gap: 2, marginBottom: 24, borderBottom: '1px solid var(--border)', overflowX: 'auto' }}>
         {TABS.map(t => (
-          <button key={t.id} onClick={() => setTab(t.id)} style={{ padding: '8px 14px', background: 'none', border: 'none', borderBottom: tab===t.id ? '2px solid var(--accent)' : '2px solid transparent', color: tab===t.id ? 'var(--accent)' : 'var(--text2)', fontWeight: tab===t.id ? 600 : 400, fontSize: 12, cursor: 'pointer', marginBottom: -1, display: 'flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}>
+          <button key={t.id} type="button" onClick={() => setTab(t.id)} style={{ padding: '8px 14px', background: 'none', border: 'none', borderBottom: tab===t.id ? '2px solid var(--accent)' : '2px solid transparent', color: tab===t.id ? 'var(--accent)' : 'var(--text2)', fontWeight: tab===t.id ? 600 : 400, fontSize: 12, cursor: 'pointer', marginBottom: -1, display: 'flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}>
             {t.label}{t.badge > 0 && <span style={{ fontSize: 10, background: 'var(--bg3)', padding: '1px 6px', borderRadius: 99, color: 'var(--text3)' }}>{t.badge}</span>}
           </button>
         ))}
       </div>
 
-      {loading && tab === 'approvals' ? (
-        <div style={{ textAlign: 'center', padding: 60 }}><div className="spinner" style={{ margin: '0 auto', width: 30, height: 30 }} /></div>
-      ) : (
-        <>
-          {tab === 'approvals' && <ApprovalsTab pending={pending} acting={acting} approve={approve} reject={reject} />}
-          {tab === 'disease' && <DiseaseTab regions={regions} onUpdate={loadData} />}
-          {tab === 'certification' && <CertificationTab onUpdate={loadData} />}
-          {tab === 'quarantine' && <QuarantineTab onUpdate={loadData} />}
-          {tab === 'reviews' && <ReviewsTab />}
-          {tab === 'alerts' && <AlertsTab alerts={alerts} />}
-        </>
+      {tab === 'products' && <ProductsTab key={productsRefresh} onEdit={openProductEdit} onAdd={openProductForm} />}
+      {tab === 'disease' && (statsLoading && !regions.length ? (
+        <div style={{ textAlign: 'center', padding: 40 }}><div className="spinner" style={{ margin: '0 auto', width: 28, height: 28 }} /></div>
+      ) : <DiseaseTab regions={regions} farms={farms} onUpdate={loadData} />)}
+      {tab === 'certified' && <CertifiedFarmsTab farms={farms} />}
+      {tab === 'alerts' && <AlertsTab alerts={alerts} />}
+      {showProductForm && (
+        <ProductFormModal
+          farms={farms}
+          values={productForm}
+          editing={!!editingProduct}
+          onChange={updateProductForm}
+          onClose={closeProductForm}
+          onSubmit={handleProductSubmit}
+          saving={productSaving}
+          error={productError}
+        />
       )}
     </div>
   )

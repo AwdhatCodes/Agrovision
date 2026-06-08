@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react'
-import { Sprout, ShoppingBasket, LayoutDashboard, ShieldCheck, Map, Bell, Microscope, LogOut, ChevronDown, ClipboardList, MessageSquare } from 'lucide-react'
-import Marketplace from './pages/Marketplace.jsx'
-import SellerDashboard from './pages/SellerDashboard.jsx'
+import { Sprout, ShoppingBasket, ShieldCheck, Map, Bell, Microscope, LogOut, ChevronDown, ClipboardList, MessageSquare } from 'lucide-react'
+import Store from './pages/Store.jsx'
 import AdminPanel from './pages/AdminPanel.jsx'
 import FarmMap from './pages/FarmMap.jsx'
 import AuthPage from './pages/AuthPage.jsx'
@@ -10,12 +9,11 @@ import FieldLogPage from './pages/FieldLogPage.jsx'
 import AgroBotPage from './pages/AgroBotPage.jsx'
 
 const NAV = [
-  { id: 'market', label: 'Marketplace', icon: ShoppingBasket },
+  { id: 'market', label: 'Store', icon: ShoppingBasket },
   { id: 'map', label: 'Farm Map', icon: Map },
   { id: 'scan', label: 'AI Scan', icon: Microscope },
   { id: 'fieldlog', label: 'Field Log', icon: ClipboardList },
   { id: 'agrobot', label: 'Agro-Bot', icon: MessageSquare },
-  { id: 'seller', label: 'Seller Dashboard', icon: LayoutDashboard, roles: ['farmer', 'admin'] },
   { id: 'admin', label: 'Admin Panel', icon: ShieldCheck, roles: ['admin'] },
 ]
 
@@ -59,6 +57,18 @@ export default function App() {
   const [alerts, setAlerts] = useState([])
   const [showAlerts, setShowAlerts] = useState(false)
   const [seenCount, setSeenCount] = useState(0)
+  const [adminPanelAction, setAdminPanelAction] = useState(null)
+
+  const normalizedRole = user?.role?.toString().toLowerCase()
+  const isAdmin = normalizedRole === 'admin'
+  const openAdminAddProduct = () => {
+    setAdminPanelAction({ type: 'add-product' })
+    setPage('admin')
+  }
+  const openAdminEditProduct = (product) => {
+    setAdminPanelAction({ type: 'edit-product', product })
+    setPage('admin')
+  }
 
   useEffect(() => {
     const token = localStorage.getItem('fm_token')
@@ -83,7 +93,35 @@ export default function App() {
     return () => clearInterval(t)
   }, [user])
 
-  const handleAuth = (u) => { setUser(u); setPage('market') }
+  useEffect(() => {
+    if (!user) return
+    const navItem = NAV.find(n => n.id === page)
+    if (navItem?.roles && !navItem.roles.includes(normalizedRole)) setPage('market')
+  }, [normalizedRole, page])
+
+  const PAGE_TITLES = {
+    market: 'Store',
+    map: 'Farm Map',
+    scan: 'AI Scan',
+    fieldlog: 'Field Log',
+    agrobot: 'Agro-Bot',
+    seller: 'Seller Dashboard',
+    admin: 'Admin Panel',
+  }
+
+  useEffect(() => {
+    if (!user) {
+      document.title = 'AgroVision — Sign in'
+      return
+    }
+    document.title = `AgroVision — ${PAGE_TITLES[page] || 'AgroVision'}`
+  }, [user, page])
+
+  const handleAuth = (u) => {
+    setUser(u)
+    const role = u?.role?.toString().toLowerCase()
+    setPage(role === 'admin' ? 'admin' : 'market')
+  }
   const updateUser = (u) => {
     setUser(u)
     localStorage.setItem('fm_user', JSON.stringify(u))
@@ -95,13 +133,13 @@ export default function App() {
     setUser(null); setPage('market')
   }
 
-  const unread = alerts.length - seenCount
+  const unread = Math.max(0, alerts.length - seenCount)
 
   if (!authChecked) return null
   if (!user) return <AuthPage onAuth={handleAuth} />
 
   const visibleNav = NAV.filter(n => {
-    if (n.roles && !n.roles.includes(user.role)) return false
+    if (n.roles && !n.roles.includes(normalizedRole)) return false
     return true
   })
 
@@ -133,34 +171,33 @@ export default function App() {
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
             <div style={{ position: 'relative' }}>
-              <button className="btn btn-ghost" onClick={() => { setShowAlerts(s => !s); setSeenCount(alerts.length) }} style={{ padding: '7px 10px', position: 'relative', color: unread > 0 ? 'var(--warning)' : 'var(--text2)' }}>
+              <button className="btn btn-ghost" onClick={() => { setShowAlerts(s => !s); setSeenCount(alerts.length) }} style={{ padding: '7px 10px', position: 'relative', color: unread > 0 ? 'var(--warning)' : 'var(--text2)' }} title={unread > 0 ? `${unread} unread alerts` : 'No unread alerts'}>
                 <Bell size={17} />
                 {unread > 0 && (
-                  <span style={{ position: 'absolute', top: 4, right: 4, width: 16, height: 16, background: 'var(--danger)', borderRadius: '50%', fontSize: 10, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white' }}>
+                  <span style={{ position: 'absolute', top: 2, right: 2, width: 18, height: 18, background: 'var(--danger)', borderRadius: '50%', fontSize: 10, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', border: '2px solid var(--bg2)' }}>
                     {unread > 9 ? '9+' : unread}
                   </span>
                 )}
               </button>
               {showAlerts && (
                 <>
-                  <div style={{ position: 'fixed', inset: 0, zIndex: 49 }} onClick={() => setShowAlerts(false)} />
-                  <div style={{ position: 'absolute', top: '100%', right: 0, marginTop: 8, width: 360, background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', boxShadow: 'var(--shadow)', zIndex: 50, overflow: 'hidden' }}>
-                    <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <div style={{ position: 'fixed', inset: 0, zIndex: 99 }} onClick={() => setShowAlerts(false)} />
+                  <div style={{ position: 'fixed', top: 70, right: 20, width: 380, maxWidth: 'calc(100vw - 40px)', background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', boxShadow: 'var(--shadow)', zIndex: 100, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+                    <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
                       <span style={{ fontWeight: 600, fontSize: 14 }}>Blight Alerts</span>
                       <span className="badge badge-red" style={{ fontSize: 10 }}>{alerts.length} active</span>
                     </div>
-                    <div style={{ maxHeight: 320, overflowY: 'auto' }}>
+                    <div style={{ maxHeight: '60vh', overflowY: 'auto', flex: 1 }}>
                       {alerts.length === 0 ? (
                         <div style={{ padding: 24, textAlign: 'center', color: 'var(--text3)', fontSize: 13 }}>No alerts</div>
                       ) : alerts.map(a => (
-                        <div key={a.id} style={{ padding: '12px 18px', borderBottom: '1px solid var(--border)', display: 'flex', gap: 12 }}>
+                        <div key={a.id} style={{ padding: '12px 18px', borderBottom: '1px solid var(--border)', display: 'flex', gap: 12, cursor: 'default' }}>
                           <div style={{ width: 8, height: 8, borderRadius: '50%', background: a.severity === 'outbreak' ? 'var(--danger)' : 'var(--warning)', marginTop: 5, flexShrink: 0 }} />
-                          <div>
-                            <p style={{ fontSize: 13, marginBottom: 4, lineHeight: 1.5 }}>{a.message}</p>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <p style={{ fontSize: 13, marginBottom: 4, lineHeight: 1.5, wordWrap: 'break-word' }}>{a.message}</p>
                             <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap' }}>
                               <span style={{ fontSize: 11, color: 'var(--text3)' }}>{a.region}</span>
-                              {a.simulated_email === 1 && <span style={{ fontSize: 10, color: 'var(--blue)', background: 'rgba(96,165,250,0.1)', padding: '1px 6px', borderRadius: 4 }}>📧 Email</span>}
-                              {a.simulated_sms === 1 && <span style={{ fontSize: 10, color: 'var(--accent)', background: 'rgba(74,222,128,0.1)', padding: '1px 6px', borderRadius: 4 }}>📱 SMS</span>}
+                              {a.blight_type && <span style={{ fontSize: 10, background: 'rgba(251,191,36,0.1)', color: 'var(--warning)', padding: '2px 6px', borderRadius: 4 }}>{a.blight_type.replace('_', ' ')}</span>}
                             </div>
                           </div>
                         </div>
@@ -176,13 +213,19 @@ export default function App() {
       </header>
 
       <main style={{ flex: 1 }}>
-        {page === 'market' && <Marketplace user={user} onUserUpdate={updateUser} />}
-        {page === 'map' && <FarmMap />}
+        {page === 'market' && (
+          <Store
+            user={user}
+            onUserUpdate={updateUser}
+            onAdminAddProduct={isAdmin ? openAdminAddProduct : undefined}
+            onAdminEditProduct={isAdmin ? openAdminEditProduct : undefined}
+          />
+        )}
+        {page === 'map' && <FarmMap user={user} />}
         {page === 'scan' && <DiagnosisPage user={user} />}
         {page === 'fieldlog' && <FieldLogPage user={user} />}
         {page === 'agrobot' && <AgroBotPage />}
-        {page === 'seller' && <SellerDashboard />}
-        {page === 'admin' && <AdminPanel />}
+        {page === 'admin' && <AdminPanel pendingAction={adminPanelAction} onActionHandled={() => setAdminPanelAction(null)} />}
       </main>
     </div>
   )

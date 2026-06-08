@@ -98,7 +98,7 @@ function ProductForm({ farms, initial, onSubmit, onClose }) {
             {!initial && (
               <div style={{ display: 'flex', gap: 8, padding: '9px 13px', background: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.2)', borderRadius: 8 }}>
                 <AlertTriangle size={14} style={{ color: 'var(--warning)', flexShrink: 0, marginTop: 1 }} />
-                <p style={{ fontSize: 12, color: 'var(--text2)' }}>New listings require admin approval before appearing in the marketplace.</p>
+                <p style={{ fontSize: 12, color: 'var(--text2)' }}>New listings require admin approval before appearing in the store.</p>
               </div>
             )}
           </div>
@@ -235,6 +235,8 @@ export default function SellerDashboard() {
   const [tab, setTab] = useState('products')
   const [listTab, setListTab] = useState('all')
   const [selectedFarm, setSelectedFarm] = useState('')
+  const [locUpdating, setLocUpdating] = useState(false)
+  const [locError, setLocError] = useState('')
 
   useEffect(() => {
     fetch('/api/farms').then(r => r.json()).then(f => { setFarms(f); if (f.length) setSelectedFarm(f[0].id) })
@@ -280,13 +282,59 @@ export default function SellerDashboard() {
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 24, gap: 16, flexWrap: 'wrap' }}>
         <div>
           <h1 style={{ fontSize: 27, fontWeight: 700, marginBottom: 4 }}>Seller Dashboard</h1>
-          <p style={{ color: 'var(--text2)', fontSize: 13 }}>Manage your potato marketplace listings</p>
+          <p style={{ color: 'var(--text2)', fontSize: 13 }}>Manage your potato store listings</p>
         </div>
         {tab === 'products' && (
-          <button className="btn btn-primary" onClick={() => { setEditing(null); setShowForm(true) }}>
-            <Plus size={15} /> Add Product
-          </button>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <button className="btn btn-primary" onClick={() => { setEditing(null); setShowForm(true) }}>
+              <Plus size={15} /> Add Product
+            </button>
+            <button className="btn" onClick={async () => {
+              setLocError('')
+              if (!selectedFarm) return setLocError('Select a farm first')
+              if (!navigator.geolocation) return setLocError('Geolocation not supported')
+              setLocUpdating(true)
+              navigator.geolocation.getCurrentPosition(async pos => {
+                try {
+                  const { latitude, longitude } = pos.coords
+                  const res = await fetch(`/api/farms/${selectedFarm}`, {
+                    method: 'PUT', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ lat: latitude, lng: longitude })
+                  })
+                  if (!res.ok) {
+                    const txt = await res.text()
+                    throw new Error(txt || `Failed (${res.status})`)
+                  }
+                  // refresh farms list
+                  fetch('/api/farms').then(r => r.ok ? r.json() : []).then(f => { setFarms(f); if (f.length && !selectedFarm) setSelectedFarm(f[0].id) })
+                } catch (err) {
+                  console.error('Set farm location failed', err)
+                  setLocError(err.message || 'Location update failed')
+                } finally { setLocUpdating(false) }
+              }, err => { setLocError(err.message || 'Unable to get location'); setLocUpdating(false) }, { enableHighAccuracy: true, timeout: 20000 })
+            }} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', background: 'var(--bg3)', border: '1px solid var(--border)', borderRadius: 8 }}>
+              {locUpdating ? <span className="spinner" style={{ width: 14, height: 14 }} /> : <MapPin size={14} />}
+              Locate Farm
+            </button>
+            {locError && <span style={{ color: 'var(--danger)', fontSize: 12, marginLeft: 8 }}>{locError}</span>}
+          </div>
         )}
+        {/* Show selected farm coordinates */}
+        {selectedFarm && (() => {
+          const cf = farms.find(f => f.id === selectedFarm)
+          return cf ? (
+            <div style={{ width: '100%', marginTop: 10 }}>
+              <div style={{ fontSize: 12, color: 'var(--text3)', display: 'flex', gap: 10, alignItems: 'center' }}>
+                <MapPin size={12} />
+                {cf.lat && cf.lng ? (
+                  <span>Location: {Number(cf.lat).toFixed(5)}, {Number(cf.lng).toFixed(5)}</span>
+                ) : (
+                  <span style={{ color: 'var(--text2)' }}>Location not set for this farm</span>
+                )}
+              </div>
+            </div>
+          ) : null
+        })()}
       </div>
 
       <div style={{ display: 'flex', gap: 4, marginBottom: 24, borderBottom: '1px solid var(--border)' }}>

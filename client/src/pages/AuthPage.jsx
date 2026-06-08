@@ -45,7 +45,7 @@ export default function AuthPage({ onAuth }) {
             <Sprout size={28} color="#4ade80" />
           </div>
           <h1 style={{ fontSize: 26, fontWeight: 700, marginBottom: 4 }}>AgroVision</h1>
-          <p style={{ color: 'var(--text3)', fontSize: 14 }}>Potato disease-aware marketplace</p>
+          <p style={{ color: 'var(--text3)', fontSize: 14 }}>Potato disease-aware store</p>
         </div>
 
         {/* Card */}
@@ -59,13 +59,43 @@ export default function AuthPage({ onAuth }) {
 
           <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             {mode === 'register' && (
-              <div className="form-group" style={{ margin: 0 }}>
-                <label style={{ marginBottom: 6, display: 'block', fontSize: 13, color: 'var(--text2)', fontWeight: 500 }}>Full name</label>
-                <div style={{ position: 'relative' }}>
-                  <User size={15} style={{ position: 'absolute', left: 13, top: '50%', transform: 'translateY(-50%)', color: 'var(--text3)', pointerEvents: 'none' }} />
-                  <input value={form.name} onChange={e => set('name', e.target.value)} placeholder="Your name" required style={{ paddingLeft: 40 }} />
+              <>
+                <div className="form-group" style={{ margin: 0 }}>
+                  <label style={{ marginBottom: 6, display: 'block', fontSize: 13, color: 'var(--text2)', fontWeight: 500 }}>Full name</label>
+                  <div style={{ position: 'relative' }}>
+                    <User size={15} style={{ position: 'absolute', left: 13, top: '50%', transform: 'translateY(-50%)', color: 'var(--text3)', pointerEvents: 'none' }} />
+                    <input value={form.name} onChange={e => set('name', e.target.value)} placeholder="Your name" required style={{ paddingLeft: 40 }} />
+                  </div>
                 </div>
-              </div>
+
+                <div className="form-group" style={{ margin: 0 }}>
+                  <label style={{ marginBottom: 6, display: 'block', fontSize: 13, color: 'var(--text2)', fontWeight: 500 }}>Account type</label>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    {['farmer', 'admin'].map(type => (
+                      <button
+                        key={type}
+                        type="button"
+                        onClick={() => set('role', type)}
+                        style={{
+                          flex: 1,
+                          padding: '12px 14px',
+                          borderRadius: 10,
+                          border: form.role === type ? '1px solid var(--accent)' : '1px solid var(--border)',
+                          background: form.role === type ? 'rgba(74,222,128,0.1)' : 'transparent',
+                          color: form.role === type ? 'var(--text)' : 'var(--text2)',
+                          cursor: 'pointer',
+                          fontWeight: 600
+                        }}
+                      >
+                        {type === 'farmer' ? 'Farmer' : 'Admin'}
+                      </button>
+                    ))}
+                  </div>
+                  <p style={{ marginTop: 8, fontSize: 12, color: 'var(--text3)' }}>
+                    Choose admin if you want admin access on the platform.
+                  </p>
+                </div>
+              </>
             )}
 
             <div className="form-group" style={{ margin: 0 }}>
@@ -87,19 +117,7 @@ export default function AuthPage({ onAuth }) {
               </div>
             </div>
 
-            {mode === 'register' && (
-              <div className="form-group" style={{ margin: 0 }}>
-                <label style={{ marginBottom: 6, display: 'block', fontSize: 13, color: 'var(--text2)', fontWeight: 500 }}>I am a</label>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                  {[{ value: 'farmer', label: '🌿 Farmer', desc: 'Sell produce, run scans' }, { value: 'buyer', label: '🛒 Buyer', desc: 'Browse & purchase' }].map(opt => (
-                    <button key={opt.value} type="button" onClick={() => set('role', opt.value)} style={{ padding: '12px 10px', border: `2px solid ${form.role === opt.value ? 'var(--accent)' : 'var(--border)'}`, borderRadius: 10, background: form.role === opt.value ? 'rgba(74,222,128,0.08)' : 'var(--bg3)', cursor: 'pointer', textAlign: 'center', transition: 'all 0.15s' }}>
-                      <p style={{ fontWeight: 600, fontSize: 13, color: form.role === opt.value ? 'var(--accent)' : 'var(--text1)' }}>{opt.label}</p>
-                      <p style={{ fontSize: 11, color: 'var(--text3)', marginTop: 2 }}>{opt.desc}</p>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
+
 
             {error && (
               <div style={{ padding: '10px 14px', background: 'rgba(248,113,113,0.1)', border: '1px solid rgba(248,113,113,0.25)', borderRadius: 8, fontSize: 13, color: 'var(--danger)', textAlign: 'center' }}>
@@ -135,7 +153,7 @@ export default function AuthPage({ onAuth }) {
           <p style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 6 }}>Demo — create any account to get started</p>
           <div style={{ display: 'flex', justifyContent: 'center', gap: 12 }}>
             <button onClick={() => { set('email', 'farmer@demo.com'); set('password', 'demo123'); set('name', 'Demo Farmer'); setMode('login') }} style={{ background: 'none', border: '1px solid var(--border)', borderRadius: 6, padding: '4px 12px', color: 'var(--text2)', fontSize: 12, cursor: 'pointer' }}>🌿 Farmer demo</button>
-            <button onClick={() => { set('email', 'admin@demo.com'); set('password', 'demo123'); set('name', 'Demo Admin'); setMode('login') }} style={{ background: 'none', border: '1px solid var(--border)', borderRadius: 6, padding: '4px 12px', color: 'var(--text2)', fontSize: 12, cursor: 'pointer' }}>🛡 Admin demo</button>
+            <button onClick={() => { set('email', 'admin@demo.com'); set('password', 'demo123'); set('name', 'Demo Admin'); setMode('login') }} style={{ background: 'none', border: '1px solid var(--border)', borderRadius: 6, padding: '4px 12px', color: 'var(--text2)', fontSize: 12, cursor: 'pointer' }}>⚙️ Admin demo</button>
           </div>
         </div>
       </div>

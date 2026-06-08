@@ -31,6 +31,86 @@ function BarRow({ label, count, max, color, bg }) {
     </div>
   )
 }
+function LineChart({ data, keys, colors, height = 220 }) {
+  const padding = 28
+  const width = 620
+  const innerWidth = width - padding * 2
+  const innerHeight = height - padding * 2
+  const maxValue = Math.max(...data.flatMap(row => keys.map(key => row[key])), 1)
+  const points = data.map((row, idx) => ({
+    x: padding + (innerWidth * idx) / Math.max(data.length - 1, 1),
+    values: keys.map(key => ({ key, y: padding + innerHeight - ((row[key] / maxValue) * innerHeight), value: row[key] })),
+    label: row.date,
+  }))
+  return (
+    <div style={{ width: '100%' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+        <div>
+          <p style={{ fontSize: 13, fontWeight: 700, marginBottom: 4 }}>Detections Over Time</p>
+          <p style={{ fontSize: 11, color: 'var(--text3)', margin: 0 }}>Last 30 days of early and late blight detections.</p>
+        </div>
+        <div style={{ display: 'flex', gap: 8, fontSize: 11, color: 'var(--text3)' }}>
+          {keys.map(key => (
+            <span key={key} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ width: 10, height: 10, borderRadius: '50%', background: colors[key] }} />
+              {key === 'early' ? 'Early' : 'Late'}
+            </span>
+          ))}
+        </div>
+      </div>
+      <div style={{ borderRadius: 18, background: 'var(--bg3)', border: '1px solid var(--border)', padding: 14 }}>
+        <svg viewBox={`0 0 ${width} ${height}`} style={{ width: '100%', height }}>
+          {[0, 0.25, 0.5, 0.75, 1].map(f => (
+            <line key={f} x1={padding} x2={width - padding} y1={padding + f * innerHeight} y2={padding + f * innerHeight} stroke="rgba(148,163,184,0.18)" />
+          ))}
+          {keys.map(key => (
+            <polyline
+              key={key}
+              fill="none"
+              stroke={colors[key]}
+              strokeWidth="2.8"
+              points={points.map(point => `${point.x},${point.values.find(v => v.key === key).y}`).join(' ')}
+            />
+          ))}
+          {points.flatMap(point => point.values.map(value => (
+            <circle key={`${point.label}-${value.key}`} cx={point.x} cy={value.y} r="3.5" fill={colors[value.key]} />
+          )))}
+          {points.map((point, idx) => idx % 5 === 0 && (
+            <text key={point.label} x={point.x} y={height - 8} textAnchor="middle" fontSize="9" fill="#94a3b8">{point.label}</text>
+          ))}
+        </svg>
+      </div>
+    </div>
+  )
+}
+function BarChart({ data, labelKey = 'region', valueKey = 'count', color = '#38bdf8', height = 220 }) {
+  const maxValue = Math.max(...data.map(row => row[valueKey]), 1)
+  return (
+    <div style={{ width: '100%' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+        <div>
+          <p style={{ fontSize: 13, fontWeight: 700, marginBottom: 4 }}>Affected Areas</p>
+          <p style={{ fontSize: 11, color: 'var(--text3)', margin: 0 }}>Grouped by county for the selected scans.</p>
+        </div>
+      </div>
+      <div style={{ borderRadius: 18, background: 'var(--bg3)', border: '1px solid var(--border)', padding: 16, minHeight: height }}>
+        {data.length === 0 ? (
+          <div style={{ padding: 30, textAlign: 'center', color: 'var(--text3)' }}>No affected region data available</div>
+        ) : (
+          <div style={{ display: 'flex', alignItems: 'flex-end', gap: 10, height: height - 70 }}>
+            {data.map(row => (
+              <div key={row[labelKey]} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+                <div style={{ width: '100%', height: Math.max(24, (row[valueKey] / maxValue) * (height - 100)), background: color, borderRadius: 14 }} />
+                <span style={{ fontSize: 11, color: 'var(--text3)', textAlign: 'center' }}>{row[labelKey]}</span>
+                <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text)' }}>{row[valueKey]}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
 
 export default function FieldLogPage({ user }) {
   const [scans, setScans] = useState([])

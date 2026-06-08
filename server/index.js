@@ -182,15 +182,63 @@ app.get('/api/diagnosis/history', (req, res) => {
 app.get('/api/farms', (req, res) => res.json(db.prepare('SELECT * FROM farms ORDER BY name').all()))
 
 app.get('/api/farms/map', (req, res) => {
-  const farms = db.prepare(`
-    SELECT f.*, r.risk_level, r.detection_count, r.blight_type as region_blight,
-      COUNT(p.id) as product_count
-    FROM farms f
-    LEFT JOIN region_disease_risk r ON r.region = f.region
-    LEFT JOIN products p ON p.farm_id = f.id AND p.status = 'approved' AND p.quarantined = 0
-    GROUP BY f.id ORDER BY f.name
-  `).all()
-  res.json(farms)
+  const adminView = req.query.view === 'admin'
+  const regions = db.prepare('SELECT * FROM region_disease_risk ORDER BY region').all()
+
+  if (!adminView) {
+    const farms = db.prepare(`
+      SELECT f.*, r.risk_level, r.detection_count, r.blight_type as region_blight,
+        COUNT(p.id) as product_count
+      FROM farms f
+      LEFT JOIN region_disease_risk r ON r.region = f.region
+      LEFT JOIN products p ON p.farm_id = f.id AND p.status = 'approved' AND p.quarantined = 0
+      GROUP BY f.id ORDER BY f.name
+    `).all()
+    return res.json(farms)
+  }
+
+  let farms
+  try {
+    farms = db.prepare(`
+      SELECT f.*, r.risk_level, r.detection_count, r.blight_type as region_blight,
+        COALESCE(SUM(CASE WHEN p.status = 'approved' AND p.quarantined = 0 THEN 1 ELSE 0 END), 0) as product_count,
+        COALESCE(SUM(CASE WHEN p.quarantined = 1 THEN 1 ELSE 0 END), 0) as quarantined_count,
+        COALESCE(SUM(CASE WHEN p.status = 'pending' THEN 1 ELSE 0 END), 0) as pending_count,
+        COALESCE(SUM(CASE WHEN p.status = 'archived' THEN 1 ELSE 0 END), 0) as archived_count,
+        COALESCE(SUM(p.views), 0) as total_views,
+        (SELECT COALESCE(SUM(revenue), 0) FROM sales WHERE farm_id = f.id) as total_revenue,
+        (SELECT COUNT(*) FROM sales WHERE farm_id = f.id) as sales_count,
+        (SELECT COUNT(*) FROM disease_scans WHERE farm_id = f.id) as scan_count,
+        (SELECT disease_result FROM disease_scans WHERE farm_id = f.id ORDER BY created_at DESC LIMIT 1) as last_scan_result,
+        (SELECT confidence FROM disease_scans WHERE farm_id = f.id ORDER BY created_at DESC LIMIT 1) as last_scan_confidence,
+        (SELECT severity FROM disease_scans WHERE farm_id = f.id ORDER BY created_at DESC LIMIT 1) as last_scan_severity,
+        (SELECT created_at FROM disease_scans WHERE farm_id = f.id ORDER BY created_at DESC LIMIT 1) as last_scan_at,
+        (SELECT status FROM certifications WHERE farm_id = f.id ORDER BY created_at DESC LIMIT 1) as cert_status
+      FROM farms f
+      LEFT JOIN region_disease_risk r ON r.region = f.region
+      LEFT JOIN products p ON p.farm_id = f.id
+      GROUP BY f.id ORDER BY f.name
+    `).all()
+  } catch (err) {
+    console.error('Admin map query failed:', err)
+    return res.status(500).json({ error: 'Failed to load admin map data' })
+  }
+
+  const summary = {
+    total_farms: farms.length,
+    certified_farms: farms.filter(f => f.certified_clean === 1).length,
+    disease_safe_farms: farms.filter(f => f.disease_safe === 1).length,
+    outbreak_regions: regions.filter(r => r.risk_level === 'outbreak').length,
+    watch_regions: regions.filter(r => r.risk_level === 'watch').length,
+    total_detections: regions.reduce((s, r) => s + (r.detection_count || 0), 0),
+    quarantined_listings: farms.reduce((s, f) => s + (f.quarantined_count || 0), 0),
+    pending_listings: farms.reduce((s, f) => s + (f.pending_count || 0), 0),
+    farms_in_outbreak_zone: farms.filter(f => f.risk_level === 'outbreak').length,
+    total_revenue: farms.reduce((s, f) => s + (f.total_revenue || 0), 0),
+    total_scans: farms.reduce((s, f) => s + (f.scan_count || 0), 0),
+  }
+
+  res.json({ farms, regions, summary })
 })
 
 app.post('/api/farms', (req, res) => {
@@ -198,6 +246,24 @@ app.post('/api/farms', (req, res) => {
   const id = randomUUID()
   db.prepare(`INSERT INTO farms (id,name,region,lat,lng,owner_email,owner_phone,disease_safe) VALUES (?,?,?,?,?,?,?,?)`).run(id, name, region, lat||0, lng||0, owner_email||null, owner_phone||null, disease_safe?1:0)
   res.status(201).json(db.prepare('SELECT * FROM farms WHERE id=?').get(id))
+})
+
+// Update farm details (including location)
+app.put('/api/farms/:id', (req, res) => {
+  const { name, region, lat, lng, owner_email, owner_phone, disease_safe } = req.body
+  const ex = db.prepare('SELECT * FROM farms WHERE id=?').get(req.params.id)
+  if (!ex) return res.status(404).json({ error: 'Not found' })
+  db.prepare(`UPDATE farms SET name=?, region=?, lat=?, lng=?, owner_email=?, owner_phone=?, disease_safe=? WHERE id=?`).run(
+    name || ex.name,
+    region || ex.region,
+    lat !== undefined ? lat : ex.lat,
+    lng !== undefined ? lng : ex.lng,
+    owner_email || ex.owner_email,
+    owner_phone || ex.owner_phone,
+    disease_safe !== undefined ? (disease_safe ? 1 : 0) : ex.disease_safe,
+    req.params.id
+  )
+  res.json(db.prepare('SELECT * FROM farms WHERE id=?').get(req.params.id))
 })
 
 // ── PRODUCTS ──
@@ -246,8 +312,10 @@ app.get('/api/products/:id', (req, res) => {
 })
 
 app.post('/api/products', upload.single('image'), (req, res) => {
-  const { name, category, price, quantity, farm_id, disease_risk_tag, disease_type } = req.body
-  if (!name || !category || !price || !quantity || !farm_id || !disease_risk_tag) return res.status(400).json({ error: 'All fields required' })
+  const { name, category, price, quantity, farm_id, disease_type } = req.body
+  let disease_risk_tag = req.body.disease_risk_tag || 'low'
+  if (!['low','medium','high'].includes(disease_risk_tag)) disease_risk_tag = 'low'
+  if (!name || !category || !price || !quantity || !farm_id) return res.status(400).json({ error: 'All fields required' })
   const id = randomUUID()
   const image_url = req.file ? `/uploads/${req.file.filename}` : null
   db.prepare(`INSERT INTO products (id,name,category,price,quantity,farm_id,disease_risk_tag,disease_type,image_url,status) VALUES (?,?,?,?,?,?,?,?,?,'pending')`).run(id, name, category, parseFloat(price), parseInt(quantity), farm_id, disease_risk_tag, disease_type||'none', image_url)
@@ -260,10 +328,20 @@ app.put('/api/products/:id', upload.single('image'), (req, res) => {
   const { name, category, price, quantity, farm_id, disease_risk_tag, disease_type } = req.body
   const ex = db.prepare('SELECT * FROM products WHERE id=?').get(req.params.id)
   if (!ex) return res.status(404).json({ error: 'Not found' })
+  let normalizedRisk = disease_risk_tag || ex.disease_risk_tag || 'low'
+  if (!['low','medium','high'].includes(normalizedRisk)) normalizedRisk = 'low'
   const image_url = req.file ? `/uploads/${req.file.filename}` : ex.image_url
   db.prepare(`UPDATE products SET name=?,category=?,price=?,quantity=?,farm_id=?,disease_risk_tag=?,disease_type=?,image_url=?,status='pending' WHERE id=?`).run(name||ex.name, category||ex.category, parseFloat(price)||ex.price, parseInt(quantity)||ex.quantity, farm_id||ex.farm_id, disease_risk_tag||ex.disease_risk_tag, disease_type||ex.disease_type||'none', image_url, req.params.id)
   db.prepare(`UPDATE products_fts SET name=? WHERE product_id=?`).run(name||ex.name, req.params.id)
   res.json(db.prepare(`SELECT p.*, f.name as farm_name, f.region, f.disease_safe, f.certified_clean, f.rating FROM products p JOIN farms f ON p.farm_id=f.id WHERE p.id=?`).get(req.params.id))
+})
+
+app.delete('/api/products/:id', (req, res) => {
+  const ex = db.prepare('SELECT id FROM products WHERE id=?').get(req.params.id)
+  if (!ex) return res.status(404).json({ error: 'Not found' })
+  db.prepare('DELETE FROM products WHERE id=?').run(req.params.id)
+  db.prepare('DELETE FROM products_fts WHERE product_id=?').run(req.params.id)
+  res.json({ success: true })
 })
 
 app.patch('/api/products/:id/archive', (req, res) => { db.prepare(`UPDATE products SET status='archived' WHERE id=?`).run(req.params.id); res.json({ success: true }) })
@@ -271,6 +349,13 @@ app.patch('/api/products/:id/approve', (req, res) => { db.prepare(`UPDATE produc
 app.patch('/api/products/:id/reject', (req, res) => { db.prepare(`UPDATE products SET status='archived' WHERE id=?`).run(req.params.id); res.json({ success: true }) })
 app.patch('/api/products/:id/quarantine', (req, res) => { db.prepare(`UPDATE products SET quarantined=1 WHERE id=?`).run(req.params.id); res.json({ success: true }) })
 app.patch('/api/products/:id/unquarantine', (req, res) => { db.prepare(`UPDATE products SET quarantined=0 WHERE id=?`).run(req.params.id); res.json({ success: true }) })
+
+app.use('/api', (req, res) => res.status(404).json({ error: 'Not found' }))
+app.use((err, req, res, next) => {
+  console.error('API error:', err)
+  if (req.path.startsWith('/api')) return res.status(err.status || 500).json({ error: err.message || 'Internal server error' })
+  next(err)
+})
 
 // ── REVIEWS ──
 app.get('/api/reviews', (req, res) => {

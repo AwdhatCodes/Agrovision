@@ -1,19 +1,18 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react'
-import { Search, SlidersHorizontal, X, ShieldCheck, Leaf, ChevronDown, AlertTriangle, Lock, MapPin, Star, Navigation, Award, CreditCard, Smartphone, Wallet, CheckCircle, ShoppingCart, Trash2, Plus, Minus, Pencil } from 'lucide-react'
-
-const CATEGORIES = ['seed', 'fertiliser', 'produce']
-const REGIONS = ['Northern Region', 'Southern Region', 'Eastern Region', 'Western Region']
-const SORT_OPTIONS = [
-  { value: 'newest', label: 'Newest' },
-  { value: 'price_asc', label: 'Price: Low → High' },
-  { value: 'price_desc', label: 'Price: High → Low' },
-  { value: 'rating', label: 'Highest Rated' },
-  { value: 'proximity', label: 'Nearest Farm' },
-]
+import { Search, X, Leaf, AlertTriangle, Lock, MapPin, Star, Navigation, CreditCard, Smartphone, Wallet, CheckCircle, ShoppingCart, Trash2, Plus, Minus, Pencil } from 'lucide-react'
 
 const RISK_COLORS = { safe: '#4ade80', watch: '#fbbf24', outbreak: '#f87171' }
 const RISK_BG = { safe: 'rgba(74,222,128,0.08)', watch: 'rgba(251,191,36,0.08)', outbreak: 'rgba(248,113,113,0.08)' }
 const BLIGHT_LABELS = { early_blight: 'Early Blight', late_blight: 'Late Blight', none: 'None' }
+const SORT_OPTIONS = [
+  { value: 'newest', label: 'Newest' },
+  { value: 'price_low', label: 'Price: low to high' },
+  { value: 'price_high', label: 'Price: high to low' },
+]
+const DISEASE_TYPES = [
+  { value: 'early_blight', label: 'Early Blight' },
+  { value: 'late_blight', label: 'Late Blight' },
+]
 const formatKsh = value => `KSh ${Number(value || 0).toLocaleString()}`
 const KENYA_PLACES = [
   { name: 'Ngong', county: 'Kajiado County', lat: -1.3527, lng: 36.6699 },
@@ -200,17 +199,6 @@ function CheckoutModal({ product, buyerLocation, onClose, onPaid }) {
             </div>
           ) : (
             <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 15 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, padding: 13, background: 'var(--bg3)', border: '1px solid var(--border)', borderRadius: 8 }}>
-                <div>
-                  <p style={{ fontWeight: 600, fontSize: 13 }}>{product.farm_name}</p>
-                  <p style={{ color: 'var(--text3)', fontSize: 12 }}>{product.region}</p>
-                </div>
-                <div style={{ textAlign: 'right' }}>
-                  <p style={{ color: 'var(--text3)', fontSize: 11 }}>Total</p>
-                  <p style={{ color: 'var(--accent)', fontWeight: 700, fontSize: 18 }}>{formatKsh(total)}</p>
-                </div>
-              </div>
-
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 8 }}>
                 {PAYMENT_METHODS.map(({ id, label, icon: Icon }) => (
                   <button key={id} type="button" onClick={() => setMethod(id)} className={method === id ? 'btn btn-primary' : 'btn btn-secondary'} style={{ justifyContent: 'center', minHeight: 42 }}>
@@ -255,6 +243,10 @@ function CheckoutModal({ product, buyerLocation, onClose, onPaid }) {
               )}
 
               {error && <p style={{ color: 'var(--danger)', fontSize: 13 }}>{error}</p>}
+              <div style={{ padding: '14px', background: 'var(--bg3)', border: '1px solid var(--border)', borderRadius: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: 13, color: 'var(--text2)', fontWeight: 500 }}>Total</span>
+                <span style={{ color: 'var(--accent)', fontWeight: 700, fontSize: 18 }}>{formatKsh(total)}</span>
+              </div>
               <button type="submit" className="btn btn-primary" disabled={saving || product.quantity < 1}>
                 {saving ? <span className="spinner" style={{ width: 14, height: 14 }} /> : <CreditCard size={14} />} Pay {formatKsh(total)}
               </button>
@@ -395,29 +387,42 @@ function DeliveryBadge({ distKm }) {
   )
 }
 
-function ProductCard({ product, isAdmin, onEdit, onCheckout, onAddToCart }) {
+function ProductCard({ product, isAdmin, recommended, onEdit, onCheckout, onAddToCart, onDelete }) {
   const isQuarantined = product.quarantined === 1
-  const hasRegionRisk = product.region_risk && product.region_risk !== 'safe'
-  const isCertified = product.certified_clean === 1
-  const riskBorder = hasRegionRisk ? `${RISK_COLORS[product.region_risk]}50` : 'var(--border)'
-
-  // Minimal card: name, price, small description
-  const desc = product.description || `${BLIGHT_LABELS[product.disease_type] || 'Fungicide'} — suitable for controlling blight in potatoes.`
+  const desc = product.description || 'Potato blight control product for healthy crops.'
   return (
-    <div className="card" style={{ padding: 14, borderColor: riskBorder, opacity: isQuarantined ? 0.65 : 1 }}>
+    <div className="card" style={{ padding: 14, borderColor: isQuarantined ? 'rgba(248,113,113,0.35)' : 'var(--border)', opacity: isQuarantined ? 0.65 : 1 }}>
+      {product.image_url && (
+        <div style={{ marginBottom: 12, borderRadius: 14, overflow: 'hidden', height: 150, background: 'var(--bg3)' }}>
+          <img src={product.image_url} alt={product.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+        </div>
+      )}
       <h3 style={{ fontWeight: 700, fontSize: 15, marginBottom: 6 }}>{product.name}</h3>
       <p style={{ margin: '6px 0', color: 'var(--text2)', fontSize: 13 }}>{desc}</p>
       <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
         <span style={{ fontWeight: 800, fontSize: 18, color: isQuarantined ? 'var(--text3)' : 'var(--accent)' }}>{formatKsh(product.price)}</span>
+        {isQuarantined && <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--danger)', background: 'rgba(248,113,113,0.1)', padding: '2px 6px', borderRadius: 4, border: '1px solid rgba(248,113,113,0.2)' }}>🔒 Quarantined</span>}
+      </div>
+      <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', minHeight: 20 }}>
         {product.quantity > 0 && !isQuarantined && (
           <span style={{ fontSize: 11, color: 'var(--text3)' }}>{product.quantity} in stock</span>
+        )}
+        {recommended && (
+          <span style={{ fontSize: 10, fontWeight: 700, color: '#166534', background: 'rgba(74,222,128,0.14)', padding: '3px 8px', borderRadius: 999, border: '1px solid rgba(74,222,128,0.2)' }}>
+            Recommended
+          </span>
         )}
       </div>
       <div style={{ marginTop: 12, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
         {isAdmin ? (
-          <button type="button" className="btn btn-primary" onClick={() => onEdit?.(product)} style={{ flex: 1, minWidth: 120, justifyContent: 'center' }}>
-            <Pencil size={14} /> Edit product
-          </button>
+          <>
+            <button type="button" className="btn btn-primary" onClick={() => onEdit?.(product)} style={{ flex: 1, minWidth: 120, justifyContent: 'center' }}>
+              <Pencil size={14} /> Edit
+            </button>
+            <button type="button" className="btn btn-danger" onClick={() => onDelete?.(product)} style={{ flex: 1, minWidth: 120, justifyContent: 'center' }}>
+              <Trash2 size={14} /> Delete
+            </button>
+          </>
         ) : isQuarantined ? (
           <span style={{ fontSize: 12, color: 'var(--danger)', display: 'flex', alignItems: 'center', gap: 4 }}>
             <Lock size={12} /> Quarantined — unavailable
@@ -442,11 +447,17 @@ export default function Store({ user, onUserUpdate, onAdminAddProduct, onAdminEd
   const [products, setProducts] = useState([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
-  const [filters, setFilters] = useState({ category: '', region: '', disease_safe: false, certified: false, sort: 'newest' })
-  const [showFilters, setShowFilters] = useState(false)
+  const [sort, setSort] = useState('newest')
   const [regionRisks, setRegionRisks] = useState({})
+  const [farms, setFarms] = useState([])
+  const [showAdminProductForm, setShowAdminProductForm] = useState(false)
+  const [editingProduct, setEditingProduct] = useState(null)
+  const [adminProductForm, setAdminProductForm] = useState({ name: '', description: '', price: '', quantity: '', farm_id: '', disease_type: 'early_blight', disease_risk_tag: 'low', category: 'fertiliser', image: null, image_url: '' })
+  const [productError, setProductError] = useState('')
+  const [productSaving, setProductSaving] = useState(false)
   const [buyerLoc, setBuyerLoc] = useState(user?.buyer_lat && user?.buyer_lng ? { lat: user.buyer_lat, lng: user.buyer_lng, region: user.buyer_region, label: user.buyer_location } : null)
   const [locLoading, setLocLoading] = useState(false)
+  const recentDiagnosisType = user?.recentDiagnosis?.disease_type || user?.recentDiagnosis?.diagnosis || user?.recentDiagnosis?.label || user?.recentDiagnosis?.result || ''
   const [reviewProduct, setReviewProduct] = useState(null)
   const [checkoutProduct, setCheckoutProduct] = useState(null)
   const [cart, setCart] = useState([])
@@ -460,7 +471,76 @@ export default function Store({ user, onUserUpdate, onAdminAddProduct, onAdminEd
     fetch('/api/regions/disease-risk').then(r => r.json()).then(data => {
       const map = {}; data.forEach(r => { map[r.region] = r }); setRegionRisks(map)
     })
+    fetch('/api/farms').then(r => r.ok ? r.json() : []).then(data => setFarms(Array.isArray(data) ? data : [])).catch(() => setFarms([]))
   }, [])
+
+  const openEditProduct = (product) => {
+    setEditingProduct(product)
+    setProductError('')
+    setAdminProductForm({
+      name: product.name || '',
+      description: product.description || '',
+      price: String(product.price ?? ''),
+      quantity: String(product.quantity ?? ''),
+      farm_id: product.farm_id || farms[0]?.id || '',
+      disease_type: product.disease_type || 'early_blight',
+      disease_risk_tag: product.disease_risk_tag || 'low',
+      category: product.category || 'fertiliser',
+      image: null,
+      image_url: product.image_url || '',
+    })
+    setShowAdminProductForm(true)
+  }
+
+  const closeProductForm = () => {
+    setShowAdminProductForm(false)
+    setEditingProduct(null)
+    setProductError('')
+  }
+
+  const saveAdminProduct = async (e) => {
+    e.preventDefault()
+    if (!adminProductForm.name || !adminProductForm.price || !adminProductForm.quantity || !adminProductForm.farm_id) {
+      setProductError('Please complete the required product fields.')
+      return
+    }
+    setProductSaving(true)
+    try {
+      const targetUrl = editingProduct ? `/api/products/${editingProduct.id}` : '/api/products'
+      const method = editingProduct ? 'PUT' : 'POST'
+      const formData = new FormData()
+      formData.append('name', adminProductForm.name)
+      formData.append('description', adminProductForm.description)
+      formData.append('category', adminProductForm.category)
+      formData.append('price', adminProductForm.price)
+      formData.append('quantity', adminProductForm.quantity)
+      formData.append('farm_id', adminProductForm.farm_id)
+      formData.append('disease_type', adminProductForm.disease_type)
+      formData.append('disease_risk_tag', adminProductForm.disease_risk_tag)
+      if (adminProductForm.image) {
+        formData.append('image', adminProductForm.image)
+      }
+      const res = await fetch(targetUrl, {
+        method,
+        body: formData,
+      })
+      let data
+      try {
+        data = await res.json()
+      } catch (parseErr) {
+        const text = await res.text()
+        data = { error: text || parseErr.message }
+      }
+      if (!res.ok) throw new Error(data.error || `Unable to save product (${res.status})`)
+      closeProductForm()
+      fetchProducts()
+    } catch (err) {
+      console.error('Admin product save failed', err)
+      setProductError(err.message || 'Could not save product')
+    } finally {
+      setProductSaving(false)
+    }
+  }
 
   const fetchProducts = useCallback(async () => {
     setLoading(true)
@@ -468,18 +548,20 @@ export default function Store({ user, onUserUpdate, onAdminAddProduct, onAdminEd
       const params = new URLSearchParams()
       if (search) params.set('search', search)
       params.set('category', 'fertiliser')
-      if (filters.region) params.set('region', filters.region)
-      if (filters.disease_safe) params.set('disease_safe', 'true')
-      if (filters.certified) params.set('certified', 'true')
-      params.set('sort', filters.sort)
-      if (buyerLoc) { params.set('buyer_lat', buyerLoc.lat); params.set('buyer_lng', buyerLoc.lng) }
+      params.set('sort', sort)
+      if (!isAdmin && buyerLoc) { params.set('buyer_lat', buyerLoc.lat); params.set('buyer_lng', buyerLoc.lng) }
       const res = await fetch(`/api/products?${params}`)
       const all = await res.json()
       // Only show fungicides for Early or Late Blight
       const filtered = all.filter(p => p.category === 'fertiliser' && (p.disease_type === 'early_blight' || p.disease_type === 'late_blight'))
-      setProducts(filtered)
+      const sorted = [...filtered].sort((a, b) => {
+        if (sort === 'price_low') return Number(a.price) - Number(b.price)
+        if (sort === 'price_high') return Number(b.price) - Number(a.price)
+        return (b.created_at || '').localeCompare(a.created_at || '')
+      })
+      setProducts(sorted)
     } finally { setLoading(false) }
-  }, [search, filters, buyerLoc])
+  }, [search, sort, buyerLoc, isAdmin])
 
   useEffect(() => {
     const t = setTimeout(fetchProducts, search ? 300 : 0)
@@ -513,8 +595,6 @@ export default function Store({ user, onUserUpdate, onAdminAddProduct, onAdminEd
     )
   }
 
-  const clearFilters = () => setFilters({ category: '', region: '', disease_safe: false, certified: false, sort: 'newest' })
-  const hasFilters = filters.category || filters.region || filters.disease_safe || filters.certified || filters.sort !== 'newest'
   const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0)
   const cartTotal = Math.round(cart.reduce((sum, item) => sum + item.product.price * item.quantity, 0) * 100) / 100
 
@@ -526,7 +606,6 @@ export default function Store({ user, onUserUpdate, onAdminAddProduct, onAdminEd
       }
       return [...items, { product, quantity: 1 }]
     })
-    setShowCart(true)
   }
 
   const updateCartQty = (productId, quantity) => {
@@ -544,6 +623,18 @@ export default function Store({ user, onUserUpdate, onAdminAddProduct, onAdminEd
     fetchProducts()
   }
 
+  const handleDeleteProduct = async (product) => {
+    if (!window.confirm(`Delete product “${product.name}”? This cannot be undone.`)) return
+    try {
+      const res = await fetch(`/api/products/${product.id}`, { method: 'DELETE' })
+      if (!res.ok) throw new Error((await res.json()).error || 'Delete failed')
+      fetchProducts()
+    } catch (err) {
+      console.error('Delete product failed', err)
+      window.alert(err.message || 'Unable to delete product')
+    }
+  }
+
   const outbreakRegions = Object.values(regionRisks).filter(r => r.risk_level === 'outbreak')
   const watchRegions = Object.values(regionRisks).filter(r => r.risk_level === 'watch')
 
@@ -554,15 +645,10 @@ export default function Store({ user, onUserUpdate, onAdminAddProduct, onAdminEd
           <h1 style={{ fontSize: 27, fontWeight: 700, marginBottom: 4 }}>Store</h1>
           <p style={{ color: 'var(--text2)', fontSize: 13 }}>
             {isAdmin
-              ? 'Manage store fungicides — use Edit on a product or Add Product to update listings.'
+              ? 'Manage store fungicides — use Edit on a product here or go to the Admin Panel to add new listings.'
               : 'Only potato fungicides for Early and Late Blight are available here.'}
           </p>
         </div>
-        {isAdmin && onAdminAddProduct && (
-          <button type="button" className="btn btn-primary" onClick={onAdminAddProduct} style={{ whiteSpace: 'nowrap', flexShrink: 0 }}>
-            <Plus size={14} /> Add Product
-          </button>
-        )}
       </div>
 
       {outbreakRegions.length > 0 && (
@@ -584,72 +670,32 @@ export default function Store({ user, onUserUpdate, onAdminAddProduct, onAdminEd
         </div>
       )}
 
-      <div style={{ display: 'flex', gap: 10, marginBottom: 16, alignItems: 'center', flexWrap: 'wrap' }}>
-        <div style={{ flex: 1, minWidth: 200, position: 'relative' }}>
-          <Search size={15} style={{ position: 'absolute', left: 13, top: '50%', transform: 'translateY(-50%)', color: 'var(--text3)', pointerEvents: 'none' }} />
-          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by product or farm name..." style={{ paddingLeft: 40, paddingRight: search ? 40 : 14 }} />
-          {search && <button onClick={() => setSearch('')} style={{ position: 'absolute', right: 11, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: 'var(--text3)', cursor: 'pointer', display: 'flex' }}><X size={13} /></button>}
+      <div style={{ marginBottom: 20 }}>
+        <div style={{ position: 'relative', marginBottom: 14 }}>
+          <Search size={16} style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: 'var(--text3)', pointerEvents: 'none' }} />
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by product or farm name..." style={{ paddingLeft: 44, paddingRight: search ? 40 : 14, width: '100%', height: 42, fontSize: 14, borderRadius: 10 }} />
+          {search && <button onClick={() => setSearch('')} style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: 'var(--text3)', cursor: 'pointer', display: 'flex', padding: 4 }}><X size={16} /></button>}
         </div>
-        <div style={{ position: 'relative' }}>
-          <select value={filters.sort} onChange={e => setFilters(f => ({ ...f, sort: e.target.value }))} style={{ width: 'auto', paddingRight: 34, appearance: 'none' }}>
-            {SORT_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-          </select>
-          <ChevronDown size={13} style={{ position: 'absolute', right: 11, top: '50%', transform: 'translateY(-50%)', color: 'var(--text3)', pointerEvents: 'none' }} />
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
+          <div style={{ fontSize: 13, color: 'var(--text3)', fontWeight: 500 }}>Showing all approved products</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <label htmlFor="sort-select" style={{ fontSize: 13, color: 'var(--text3)', fontWeight: 500, whiteSpace: 'nowrap' }}>Sort by:</label>
+              <select id="sort-select" value={sort} onChange={e => setSort(e.target.value)} style={{ padding: '8px 12px', minWidth: 150, background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--text2)', fontSize: 13, fontFamily: 'inherit', cursor: 'pointer', fontWeight: 500 }}>
+                {SORT_OPTIONS.map(option => (<option key={option.value} value={option.value}>{option.label}</option>))}
+              </select>
+            </div>
+            {!isAdmin && (
+              <button className={cartCount ? 'btn btn-primary' : 'btn btn-secondary'} onClick={() => setShowCart(true)} style={{ whiteSpace: 'nowrap', position: 'relative', marginLeft: 'auto' }}>
+                <ShoppingCart size={14} /> Cart
+                {cartCount > 0 && <span style={{ minWidth: 18, height: 18, borderRadius: 99, background: cartCount ? '#0a1a0f' : 'var(--bg3)', color: cartCount ? 'var(--accent)' : 'var(--text3)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700 }}>{cartCount}</span>}
+                {cartTotal > 0 && <span style={{ fontSize: 11, opacity: 0.8 }}>{formatKsh(cartTotal)}</span>}
+              </button>
+            )}
+          </div>
         </div>
-        <button className="btn btn-secondary" onClick={detectLocation} disabled={locLoading} title={buyerLoc ? 'Location set — click to refresh' : 'Detect my location for delivery estimates'}
-          style={{ whiteSpace: 'nowrap', borderColor: buyerLoc ? 'var(--accent)' : 'var(--border)', color: buyerLoc ? 'var(--accent)' : 'var(--text2)' }}>
-          {locLoading ? <span className="spinner" style={{ width: 13, height: 13 }} /> : <Navigation size={14} />}
-          {buyerLoc?.label || (buyerLoc ? 'Location set' : 'My location')}
-        </button>
-        <button className={`btn ${showFilters ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setShowFilters(s => !s)} style={{ whiteSpace: 'nowrap' }}>
-          <SlidersHorizontal size={14} /> Filters {hasFilters && <span style={{ width: 5, height: 5, borderRadius: '50%', background: showFilters ? '#0a1a0f' : 'var(--accent)' }} />}
-        </button>
-        {!isAdmin && (
-          <button className={cartCount ? 'btn btn-primary' : 'btn btn-secondary'} onClick={() => setShowCart(true)} style={{ whiteSpace: 'nowrap', position: 'relative' }}>
-            <ShoppingCart size={14} /> Cart
-            {cartCount > 0 && <span style={{ minWidth: 18, height: 18, borderRadius: 99, background: cartCount ? '#0a1a0f' : 'var(--bg3)', color: cartCount ? 'var(--accent)' : 'var(--text3)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700 }}>{cartCount}</span>}
-            {cartTotal > 0 && <span style={{ fontSize: 11, opacity: 0.8 }}>{formatKsh(cartTotal)}</span>}
-          </button>
-        )}
       </div>
 
-      {showFilters && (
-        <div className="card" style={{ padding: 18, marginBottom: 16, display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'flex-end' }}>
-          <div className="form-group" style={{ flex: '1 1 160px' }}>
-            <label>Category</label>
-            <select value={filters.category} onChange={e => setFilters(f => ({ ...f, category: e.target.value }))}>
-              <option value="">All</option>
-              {CATEGORIES.map(c => <option key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>)}
-            </select>
-          </div>
-          <div className="form-group" style={{ flex: '1 1 190px' }}>
-            <label>Region</label>
-            <select value={filters.region} onChange={e => setFilters(f => ({ ...f, region: e.target.value }))}>
-              <option value="">All Regions</option>
-              {REGIONS.map(r => {
-                const risk = regionRisks[r]
-                const icon = risk?.risk_level === 'outbreak' ? '🔴' : risk?.risk_level === 'watch' ? '🟡' : '🟢'
-                return <option key={r} value={r}>{icon} {r}</option>
-              })}
-            </select>
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, flex: '1 1 200px' }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13, color: 'var(--text2)' }}>
-              <div onClick={() => setFilters(f => ({ ...f, certified: !f.certified }))} style={{ width: 36, height: 20, borderRadius: 99, position: 'relative', cursor: 'pointer', background: filters.certified ? 'var(--accent)' : 'var(--bg3)', border: '1px solid var(--border)', transition: 'background 0.2s', flexShrink: 0 }}>
-                <div style={{ position: 'absolute', top: 2, left: filters.certified ? 16 : 2, width: 14, height: 14, borderRadius: '50%', background: 'white', transition: 'left 0.2s' }} />
-              </div>
-              <Award size={13} color="var(--accent)" /> Certified Clean only
-            </label>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13, color: 'var(--text2)' }}>
-              <div onClick={() => setFilters(f => ({ ...f, disease_safe: !f.disease_safe }))} style={{ width: 36, height: 20, borderRadius: 99, position: 'relative', cursor: 'pointer', background: filters.disease_safe ? 'var(--accent)' : 'var(--bg3)', border: '1px solid var(--border)', transition: 'background 0.2s', flexShrink: 0 }}>
-                <div style={{ position: 'absolute', top: 2, left: filters.disease_safe ? 16 : 2, width: 14, height: 14, borderRadius: '50%', background: 'white', transition: 'left 0.2s' }} />
-              </div>
-              <ShieldCheck size={13} color="var(--accent)" /> Disease-safe farms
-            </label>
-          </div>
-          {hasFilters && <button className="btn btn-ghost" onClick={clearFilters} style={{ color: 'var(--text3)', fontSize: 12 }}><X size={12} /> Clear</button>}
-        </div>
-      )}
 
       {loading ? (
         <div style={{ textAlign: 'center', padding: 80 }}>
@@ -660,13 +706,12 @@ export default function Store({ user, onUserUpdate, onAdminAddProduct, onAdminEd
         <div className="empty-state">
           <Search size={44} style={{ margin: '0 auto 14px', display: 'block' }} />
           <p style={{ fontSize: 15, fontWeight: 600, marginBottom: 5 }}>No products found</p>
-          <p style={{ fontSize: 13 }}>Try adjusting your search or filters</p>
+          <p style={{ fontSize: 13 }}>Try adjusting your search</p>
         </div>
       ) : (
         <>
           <p style={{ color: 'var(--text3)', fontSize: 12, marginBottom: 14 }}>
             {products.length} product{products.length !== 1 ? 's' : ''} found
-            {buyerLoc && <span style={{ marginLeft: 8, color: 'var(--blue)' }}>· sorted by {filters.sort === 'proximity' ? 'distance' : 'selected order'} from your location</span>}
           </p>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(255px, 1fr))', gap: 18 }}>
             {products.map(p => (
@@ -674,7 +719,9 @@ export default function Store({ user, onUserUpdate, onAdminAddProduct, onAdminEd
                 key={p.id}
                 product={p}
                 isAdmin={isAdmin}
-                onEdit={onAdminEditProduct}
+                recommended={!isAdmin && recentDiagnosisType && p.disease_type === recentDiagnosisType}
+                onEdit={openEditProduct}
+                onDelete={handleDeleteProduct}
                 onCheckout={isAdmin ? undefined : setCheckoutProduct}
                 onAddToCart={isAdmin ? undefined : addToCart}
               />
@@ -686,6 +733,69 @@ export default function Store({ user, onUserUpdate, onAdminAddProduct, onAdminEd
       {!isAdmin && reviewProduct && <ReviewModal product={reviewProduct} onClose={() => { setReviewProduct(null); fetchProducts() }} />}
       {!isAdmin && checkoutProduct && <CheckoutModal product={checkoutProduct} buyerLocation={buyerLoc || (user?.buyer_lat && user?.buyer_lng ? { lat: user.buyer_lat, lng: user.buyer_lng, region: user.buyer_region, label: user.buyer_location } : null)} onClose={() => setCheckoutProduct(null)} onPaid={fetchProducts} />}
       {!isAdmin && showCart && <CartModal items={cart} buyerLocation={buyerLoc || (user?.buyer_lat && user?.buyer_lng ? { lat: user.buyer_lat, lng: user.buyer_lng, region: user.buyer_region, label: user.buyer_location } : null)} onClose={() => setShowCart(false)} onUpdateQty={updateCartQty} onRemove={removeFromCart} onClear={clearCart} onPaid={handleCartPaid} />}
+
+      {showAdminProductForm && (
+        <div className="modal-overlay" onClick={e => e.target === e.currentTarget && closeProductForm()}>
+          <div className="modal" style={{ maxWidth: 560 }}>
+            <div className="modal-header" style={{ justifyContent: 'space-between' }}>
+              <div>
+                <h2 style={{ fontSize: 15, fontWeight: 600 }}>{editingProduct ? 'Edit Store Product' : 'Add Store Product'}</h2>
+                <p style={{ fontSize: 12, color: 'var(--text3)' }}>{editingProduct ? 'Update a product listing for the store.' : 'Create a new fungicide product listing.'}</p>
+              </div>
+              <button className="btn btn-ghost" onClick={closeProductForm} style={{ padding: '4px 8px' }}><X size={16} /></button>
+            </div>
+            <form className="modal-body" onSubmit={saveAdminProduct} style={{ display: 'grid', gap: 14 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <div className="form-group">
+                  <label>Product Name</label>
+                  <input value={adminProductForm.name} onChange={e => setAdminProductForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Potato Blight Guard" required />
+                </div>
+                <div className="form-group">
+                  <label>Price</label>
+                  <input type="number" min="0" value={adminProductForm.price} onChange={e => setAdminProductForm(f => ({ ...f, price: e.target.value }))} placeholder="e.g. 3400" required />
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label>Description</label>
+                <textarea value={adminProductForm.description} onChange={e => setAdminProductForm(f => ({ ...f, description: e.target.value }))} placeholder="e.g. Effective fungicide for controlling early and late blight..." style={{ minHeight: 80, resize: 'vertical' }} />
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 12 }}>
+                <div className="form-group">
+                  <label>Quantity</label>
+                  <input type="number" min="0" value={adminProductForm.quantity} onChange={e => setAdminProductForm(f => ({ ...f, quantity: e.target.value }))} placeholder="e.g. 10" required />
+                </div>
+              </div>
+
+
+
+              <div style={{ display: 'grid', gap: 12 }}>
+                <div className="form-group">
+                  <label>Product Image</label>
+                  <input type="file" accept="image/*" onChange={e => {
+                    const file = e.target.files?.[0] || null
+                    setAdminProductForm(f => ({ ...f, image: file, image_url: file ? URL.createObjectURL(file) : f.image_url }))
+                  }} />
+                </div>
+                {(adminProductForm.image_url || adminProductForm.image) && (
+                  <div style={{ borderRadius: 16, overflow: 'hidden', border: '1px solid var(--border)' }}>
+                    <img src={adminProductForm.image_url} alt="Product preview" style={{ width: '100%', height: 180, objectFit: 'cover' }} />
+                  </div>
+                )}
+              </div>
+
+              {productError && <p style={{ color: 'var(--danger)', fontSize: 13 }}>{productError}</p>}
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, flexWrap: 'wrap' }}>
+                <button type="button" className="btn btn-secondary" onClick={closeProductForm} style={{ minWidth: 110 }}>Cancel</button>
+                <button type="submit" className="btn btn-primary" disabled={productSaving} style={{ minWidth: 110 }}>
+                  {productSaving ? <span className="spinner" style={{ width: 14, height: 14 }} /> : editingProduct ? 'Save Product' : 'Create Product'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

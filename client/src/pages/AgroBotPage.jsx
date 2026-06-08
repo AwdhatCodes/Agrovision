@@ -14,9 +14,9 @@ const LANG = {
     responses: {
       disease: "To identify a disease, go to the **AI Scan** page and upload a photo of your plant. The scanner can detect Early Blight, Late Blight, and healthy crops with confidence scores.",
       fungicide: "For Early Blight, apply mancozeb or chlorothalonil at **1.5–2g per litre** of water every 7–10 days. For Late Blight, use metalaxyl-based fungicides. Always follow the label instructions.",
-      treatment: "Check the **Marketplace** for certified treatments — filter by 'Fertiliser' category. You can also contact certified farms directly through the Farm Map.",
+      treatment: "Check the **Store** for certified treatments — filter by 'Fertiliser' category. You can also contact certified farms directly through the Farm Map.",
       safe: "Potatoes affected by Late Blight should **not** be consumed if there is significant rot. Early Blight mostly affects leaves — the tubers are generally safe if the skin is intact and there is no soft rot.",
-      default: "I'm your AgroVision assistant. I can help with disease identification, treatment advice, and marketplace guidance. Try asking about blight, fungicide dosage, or crop safety.",
+      default: "I'm your AgroVision assistant. I can help with disease identification, treatment advice, and store guidance. Try asking about blight, fungicide dosage, or crop safety.",
     },
   },
   SW: {
@@ -122,6 +122,18 @@ export default function AgroBotPage() {
       const transcript = e.results[0][0].transcript
       setInput(transcript)
       setListening(false)
+      // Auto-send message after successful speech recognition
+      setTimeout(() => {
+        const userMsg = { id: Date.now(), role: 'user', text: transcript }
+        setMessages(m => [...m, userMsg])
+        setInput('')
+        setThinking(true)
+        setTimeout(() => {
+          const reply = getBotResponse(transcript, lang)
+          setMessages(m => [...m, { id: Date.now() + 1, role: 'bot', text: reply }])
+          setThinking(false)
+        }, 900 + Math.random() * 600)
+      }, 100)
     }
     rec.onerror = () => setListening(false)
     rec.onend = () => setListening(false)
