@@ -3,8 +3,8 @@ import { spawn } from 'node:child_process'
 const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm'
 
 const processes = [
-  spawn('node', ['server/index.js'], { shell: true, stdio: 'inherit' }),
-  spawn(npm, ['--prefix', 'client', 'run', 'dev'], { shell: true, stdio: 'inherit' }),
+  spawn('node', ['server/index.js'], { stdio: 'inherit' }),
+  spawn(npm, ['--prefix', 'client', 'run', 'dev'], { stdio: 'inherit' }),
 ]
 
 let shuttingDown = false
