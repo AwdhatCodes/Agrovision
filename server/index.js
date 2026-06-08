@@ -5,12 +5,20 @@ import { fileURLToPath } from 'url'
 import { dirname, join, extname } from 'path'
 import { randomUUID } from 'crypto'
 import bcrypt from 'bcryptjs'
+import Stripe from 'stripe'
 import db from './db.js'
 import { signToken, requireAuth, optionalAuth, verifyToken } from './auth.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const app = express()
 const PORT = 3001
+
+let stripe = null
+if (process.env.STRIPE_SECRET_KEY) {
+  stripe = new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: '2024-10-28' })
+} else {
+  console.warn('[WARNING] STRIPE_SECRET_KEY not set - Stripe payment integration will not work')
+}
 
 app.use(cors())
 app.use(express.json())
@@ -385,6 +393,110 @@ app.post('/api/reviews', (req, res) => {
 app.patch('/api/reviews/:id/approve', (req, res) => { db.prepare(`UPDATE reviews SET approved=1 WHERE id=?`).run(req.params.id); res.json({ success: true }) })
 app.patch('/api/reviews/:id/reject', (req, res) => { db.prepare(`UPDATE reviews SET approved=0 WHERE id=?`).run(req.params.id); res.json({ success: true }) })
 app.delete('/api/reviews/:id', (req, res) => { db.prepare(`DELETE FROM reviews WHERE id=?`).run(req.params.id); res.json({ success: true }) })
+
+// ── PAYMENTS (STRIPE) ──
+app.post('/api/stripe/create-checkout-session', async (req, res) => {
+  try {
+    if (!stripe) {
+      return res.status(503).json({ error: 'Stripe is not configured. Please set STRIPE_SECRET_KEY environment variable.' })
+    }
+    
+    const { product_id, quantity = 1, buyer_name, buyer_email, buyer_region, buyer_location, buyer_lat, buyer_lng } = req.body
+    
+    if (!product_id || !buyer_name || !buyer_email) {
+      return res.status(400).json({ error: 'Product, buyer name, and email required' })
+    }
+    
+    const product = db.prepare("SELECT * FROM products WHERE id=? AND status='approved' AND quarantined=0").get(product_id)
+    if (!product) return res.status(404).json({ error: 'Product not found' })
+    
+    const qty = parseInt(quantity)
+    if (product.quantity < qty) return res.status(409).json({ error: 'Not enough stock available' })
+    
+    const session = await stripe.checkout.sessions.create({
+      payment_method_types: ['card'],
+      line_items: [
+        {
+          price_data: {
+            currency: 'usd',
+            product_data: {
+              name: product.name,
+              description: product.description || 'Agricultural product',
+            },
+            unit_amount: Math.round(product.price * 100),
+          },
+          quantity: qty,
+        },
+      ],
+      mode: 'payment',
+      success_url: `${process.env.CLIENT_URL || 'http://localhost:5173'}/payment/success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${process.env.CLIENT_URL || 'http://localhost:5173'}/store`,
+      customer_email: buyer_email,
+      metadata: {
+        product_id,
+        quantity: qty,
+        buyer_name,
+        buyer_region: buyer_region || '',
+        buyer_location: buyer_location || '',
+        buyer_lat: buyer_lat || '',
+        buyer_lng: buyer_lng || '',
+        farm_id: product.farm_id,
+      },
+    })
+    
+    res.json({ clientSecret: session.client_secret, sessionId: session.id })
+  } catch (err) {
+    console.error('Stripe session error:', err)
+    res.status(500).json({ error: 'Failed to create checkout session' })
+  }
+})
+
+app.post('/api/stripe/confirm-payment', async (req, res) => {
+  try {
+    if (!stripe) {
+      return res.status(503).json({ error: 'Stripe is not configured' })
+    }
+    
+    const { sessionId } = req.body
+    if (!sessionId) return res.status(400).json({ error: 'Session ID required' })
+    
+    const session = await stripe.checkout.sessions.retrieve(sessionId)
+    if (session.payment_status !== 'paid') {
+      return res.status(400).json({ error: 'Payment not completed' })
+    }
+    
+    const { product_id, quantity, buyer_name, buyer_region, buyer_location, buyer_lat, buyer_lng, farm_id } = session.metadata
+    const qty = parseInt(quantity)
+    const product = db.prepare('SELECT price FROM products WHERE id=?').get(product_id)
+    if (!product) return res.status(404).json({ error: 'Product not found' })
+    
+    const saleId = randomUUID()
+    const payment_reference = `STRIPE-${session.id.slice(0, 16).toUpperCase()}`
+    const revenue = product.price * qty
+    
+    const createSale = db.transaction(() => {
+      db.prepare('UPDATE products SET quantity=quantity-? WHERE id=?').run(qty, product_id)
+      db.prepare(`INSERT INTO sales (id,product_id,farm_id,quantity,revenue,buyer_region,buyer_lat,buyer_lng,buyer_location,buyer_name,payment_method,payment_reference,payment_status,created_at)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,'paid',datetime('now'))`).run(
+        saleId, product_id, farm_id, qty, revenue, buyer_region || null, buyer_lat || null, buyer_lng || null, 
+        buyer_location || null, buyer_name, 'stripe', payment_reference
+      )
+    })
+    createSale()
+    
+    res.json({ 
+      id: saleId, 
+      payment_reference, 
+      payment_status: 'paid', 
+      payment_method: 'stripe',
+      quantity: qty, 
+      total: revenue 
+    })
+  } catch (err) {
+    console.error('Payment confirmation error:', err)
+    res.status(500).json({ error: 'Failed to confirm payment' })
+  }
+})
 
 // ── CERTIFICATIONS ──
 app.post('/api/checkout', (req, res) => {

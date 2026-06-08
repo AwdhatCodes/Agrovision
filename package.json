@@ -10,13 +10,18 @@
     "start": "node scripts/start-production.mjs"
   },
   "dependencies": {
+    "@stripe/react-stripe-js": "^6.6.0",
+    "@stripe/stripe-js": "^9.7.0",
     "bcryptjs": "^3.0.3",
     "better-sqlite3": "^12.10.0",
     "cors": "^2.8.5",
     "express": "^4.18.2",
     "jsonwebtoken": "^9.0.3",
+    "lucide-react": "^1.17.0",
     "multer": "^1.4.5-lts.1",
     "pg": "^8.20.0",
+    "react": "^19.2.7",
+    "stripe": "^22.2.0",
     "uuid": "^14.0.0"
   }
 }

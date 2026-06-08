@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { Search, X, Leaf, AlertTriangle, Lock, MapPin, Star, Navigation, CreditCard, Smartphone, Wallet, CheckCircle, ShoppingCart, Trash2, Plus, Minus, Pencil } from 'lucide-react'
+import StripeCheckout from '../components/StripeCheckout'
 
 const RISK_COLORS = { safe: '#4ade80', watch: '#fbbf24', outbreak: '#f87171' }
 const RISK_BG = { safe: 'rgba(74,222,128,0.08)', watch: 'rgba(251,191,36,0.08)', outbreak: 'rgba(248,113,113,0.08)' }
@@ -137,25 +138,32 @@ function ReviewModal({ product, onClose }) {
 }
 
 const PAYMENT_METHODS = [
+  { id: 'stripe', label: 'Stripe', icon: CreditCard },
   { id: 'mpesa', label: 'M-Pesa', icon: Smartphone },
-  { id: 'card', label: 'Card', icon: CreditCard },
   { id: 'paypal', label: 'PayPal', icon: Wallet },
 ]
 
 function CheckoutModal({ product, buyerLocation, onClose, onPaid }) {
-  const [method, setMethod] = useState('mpesa')
+  const [method, setMethod] = useState('stripe')
   const [form, setForm] = useState({ buyer_name: '', buyer_region: buyerLocation?.region || '', quantity: 1, phone: '', email: '', card_last4: '' })
   const [saving, setSaving] = useState(false)
   const [result, setResult] = useState(null)
   const [error, setError] = useState('')
+  const [showStripeCheckout, setShowStripeCheckout] = useState(false)
 
   const quantity = Math.max(1, Math.min(parseInt(form.quantity) || 1, product.quantity || 1))
   const total = Math.round(product.price * quantity * 100) / 100
 
   const submit = async (e) => {
     e.preventDefault()
-    setSaving(true)
     setError('')
+    
+    if (method === 'stripe') {
+      setShowStripeCheckout(true)
+      return
+    }
+
+    setSaving(true)
     const res = await fetch('/api/checkout', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -177,6 +185,15 @@ function CheckoutModal({ product, buyerLocation, onClose, onPaid }) {
     }
     setResult(data)
     onPaid()
+  }
+
+  const handleStripeSuccess = async () => {
+    onPaid()
+    onClose()
+  }
+
+  if (showStripeCheckout) {
+    return <StripeCheckout product={product} quantity={quantity} buyerLocation={buyerLocation} onClose={() => setShowStripeCheckout(false)} onSuccess={handleStripeSuccess} />
   }
 
   return (
