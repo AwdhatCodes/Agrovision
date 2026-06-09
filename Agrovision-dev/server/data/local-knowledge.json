@@ -1,0 +1,39 @@
+{
+  "diseases": {
+    "early_blight": {
+      "name": "Early Blight",
+      "aliases": ["early blight"],
+      "advice": "Early blight is a common potato disease that starts as small dark spots on older leaves. Remove infected leaves, improve airflow by spacing plants correctly, avoid overhead watering, and apply a copper-based or organic fungicide if the problem is severe. Rotate crops and plant resistant varieties next season."
+    },
+    "late_blight": {
+      "name": "Late Blight",
+      "aliases": ["late blight"],
+      "advice": "Late blight can spread quickly and causes large dark lesions on leaves and stems. Remove infected plants immediately, destroy any affected plant material, and avoid splashing water on foliage. Use a protected fungicide and keep the soil well drained. Prevent it by planting certified seed potatoes and avoiding wet, cool conditions."
+    },
+    "healthy": {
+      "name": "Healthy",
+      "aliases": ["healthy", "no disease"],
+      "advice": "Your crop looks healthy. Continue good care by watering evenly, using balanced fertilizer, keeping weeds under control, and checking plants regularly for any early warning signs. Healthy plants resist disease better."
+    },
+    "general": {
+      "name": "General Potato Care",
+      "aliases": ["potato care"],
+      "advice": "For healthy potato crops, keep soil moist but not waterlogged, use well-rotted compost, plant in full sun, rotate crops each year, and remove damaged leaves promptly. Regularly inspect for pests, disease spots, and nutrient deficiencies."
+    }
+  },
+  "general": [
+    {
+      "keywords": ["yellow", "yellow leaves", "yellowing leaves", "yellowing"],
+      "advice": "Yellow leaves often mean too much water, nutrient imbalance, or early disease. Check the soil moisture, remove any badly damaged leaves, and apply a balanced fertilizer. Avoid overwatering and make sure roots are not sitting in water."
+    },
+    {
+      "keywords": ["leaf spots", "spots on leaves", "black spots", "brown spots"],
+      "advice": "Spots on potato leaves can signal fungal infection. Remove affected leaves, improve airflow around plants, and avoid wetting foliage. If the spots spread quickly, treat with a suitable fungicide and rotate the crop next season."
+    },
+    {
+      "keywords": ["pest", "insect", "weevil", "aphid", "worm"],
+      "advice": "If pests are attacking your potato plants, pick off insects by hand when possible, use neem oil or insecticidal soap, and keep the area clean of debris. Healthy, well-fed plants are less likely to suffer serious pest damage."
+    }
+  ],
+  "fallback": "I am a local potato farming assistant. If you need advice on common diseases or crop care, ask with a disease name or describe what you see on your plants."
+}
