@@ -38,6 +38,21 @@ const LANG = {
   },
 }
 
+const DISEASE_LABELS = {
+  'early blight': 'Early Blight',
+  'late blight': 'Late Blight',
+  'healthy': 'Healthy',
+  'early_blight': 'Early Blight',
+  'late_blight': 'Late Blight'
+}
+
+function mapDiseaseKeyToLabel(key) {
+  if (!key) return ''
+  const trimmed = String(key).trim()
+  const normalized = trimmed.toLowerCase().replace(/[_-]+/g, ' ')
+  return DISEASE_LABELS[trimmed] || DISEASE_LABELS[normalized] || normalized.split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')
+}
+
 function getBotResponse(text, lang) {
   const t = text.toLowerCase()
   const r = LANG[lang].responses
@@ -70,27 +85,39 @@ function ChatBubble({ msg }) {
   )
 }
 
+let lastAutoAskedDisease = null
+
 export default function AgroBotPage({ disease }) {
   const [lang, setLang] = useState('EN')
-  const [messages, setMessages] = useState([
-    { id: 1, role: 'bot', text: LANG.EN.responses.default }
-  ])
+  const [messages, setMessages] = useState(() => (
+    disease
+      ? []
+      : [{ id: 1, role: 'bot', text: LANG.EN.responses.default }]
+  ))
   const [input, setInput] = useState('')
   const [diseaseInput, setDiseaseInput] = useState('')
   const [thinking, setThinking] = useState(false)
   const [listening, setListening] = useState(false)
   const endRef = useRef(null)
   const recognitionRef = useRef(null)
+  const diseaseAdviceSentRef = useRef(false)
 
   useEffect(() => {
-    if (disease) setDiseaseInput(disease)
+    if (disease) {
+      setDiseaseInput(mapDiseaseKeyToLabel(disease))
+      diseaseAdviceSentRef.current = false
+      lastAutoAskedDisease = null
+    }
   }, [disease])
 
   useEffect(() => {
     if (!disease || thinking) return
-    if (messages.length !== 1) return
-    if (messages[0].role !== 'bot') return
-    if (messages[0].text !== LANG[lang].responses.default) return
+    if (messages.some(msg => msg.role === 'user')) return
+    if (diseaseAdviceSentRef.current) return
+    const normalizedDisease = String(disease).trim().toLowerCase()
+    if (normalizedDisease && lastAutoAskedDisease === normalizedDisease) return
+    diseaseAdviceSentRef.current = true
+    lastAutoAskedDisease = normalizedDisease
     sendMessage('')
   }, [disease, thinking, lang, messages])
 
@@ -106,6 +133,7 @@ export default function AgroBotPage({ disease }) {
     if (thinking) return
     const question = (text !== undefined ? text : input).trim()
     const diseaseName = (disease || diseaseInput || '').trim()
+    const diseaseLabel = mapDiseaseKeyToLabel(diseaseName)
 
     // If user didn't provide a question, this is a proactive advice request and requires a detected disease
     if (!question) {
@@ -115,7 +143,8 @@ export default function AgroBotPage({ disease }) {
       }
     }
 
-    const userMsg = { id: Date.now(), role: 'user', text: question || `Advice for ${diseaseName}` }
+    const userText = question || `Advice for ${diseaseLabel || diseaseName}`
+    const userMsg = { id: Date.now(), role: 'user', text: userText }
     setMessages(m => [...m, userMsg])
     setInput('')
     setThinking(true)
@@ -124,7 +153,7 @@ export default function AgroBotPage({ disease }) {
       const response = await fetch('/chat/advice', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ disease: diseaseName || null, question })
+        body: JSON.stringify({ disease: diseaseLabel || null, question, lang })
       })
       const data = await response.json()
       const reply = response.ok ? (data.advice || 'I could not generate advice right now.') : (data.error || 'Unable to get advice from the server.')
@@ -154,20 +183,9 @@ export default function AgroBotPage({ disease }) {
     rec.interimResults = false
     rec.onresult = (e) => {
       const transcript = e.results[0][0].transcript
-      setInput(transcript)
+      setInput('')
       setListening(false)
-      // Auto-send message after successful speech recognition
-      setTimeout(() => {
-        const userMsg = { id: Date.now(), role: 'user', text: transcript }
-        setMessages(m => [...m, userMsg])
-        setInput('')
-        setThinking(true)
-        setTimeout(() => {
-          const reply = getBotResponse(transcript, lang)
-          setMessages(m => [...m, { id: Date.now() + 1, role: 'bot', text: reply }])
-          setThinking(false)
-        }, 900 + Math.random() * 600)
-      }, 100)
+      sendMessage(transcript)
     }
     rec.onerror = () => setListening(false)
     rec.onend = () => setListening(false)

@@ -88,7 +88,9 @@ export default function App() {
 
   useEffect(() => {
     if (!user) return
-    const load = () => fetch('/api/alerts').then(r => r.json()).then(setAlerts).catch(() => {})
+    const load = () => fetch('/api/alerts').then(r => r.json()).then(data => {
+      setAlerts(Array.isArray(data) ? data : [])
+    }).catch(() => setAlerts([]))
     load()
     const t = setInterval(load, 15000)
     return () => clearInterval(t)
