@@ -164,7 +164,6 @@ addCol('sales', 'buyer_location', 'TEXT')
 addCol('sales', 'payment_method', 'TEXT DEFAULT "card"')
 addCol('sales', 'payment_reference', 'TEXT')
 addCol('sales', 'payment_status', 'TEXT DEFAULT "paid"')
-addCol('disease_scans', 'heatmap', 'TEXT')
 
 const seedData = db.transaction(() => {
   const insertFarm = db.prepare(`INSERT OR IGNORE INTO farms (id, name, region, disease_safe, certified_clean, rating, rating_count, lat, lng, owner_email, owner_phone) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)

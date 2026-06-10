@@ -103,7 +103,7 @@ function simulateDiagnosis(filename = '', fileSize = 0) {
   return { disease_result, confidence, affected_area_pct, severity }
 }
 
-const AI_ENGINE_URL = process.env.AI_ENGINE_URL || 'http://localhost:5002'
+const AI_ENGINE_URL = process.env.AI_ENGINE_URL || 'http://127.0.0.1:5002'
 
 function mapAiDiagnosis(label = '') {
   const normalized = label.toLowerCase().replace(/\s+/g, '_')
@@ -125,7 +125,16 @@ async function runAiDiagnosis(file) {
   formData.append('file', new Blob([fileBuffer], { type: file.mimetype || 'application/octet-stream' }), file.originalname)
 
   const response = await fetch(`${AI_ENGINE_URL}/predict`, { method: 'POST', body: formData })
-  if (!response.ok) throw new Error(`AI engine responded with ${response.status}`)
+  
+  // --- NEW: Read the exact error message from Python if it fails ---
+  if (!response.ok) {
+    let errorMsg = `AI engine responded with ${response.status}`
+    try {
+      const errData = await response.json()
+      if (errData.error) errorMsg = errData.error
+    } catch(e) {}
+    throw new Error(errorMsg)
+  }
 
   const data = await response.json()
   if (!data.success) throw new Error(data.error || 'AI engine prediction failed')
@@ -212,6 +221,10 @@ app.post('/api/diagnosis/scan', upload.single('image'), async (req, res) => {
   try {
     diagnosis = req.file ? await runAiDiagnosis(req.file) : simulateDiagnosis('', 0)
   } catch (err) {
+    // --- NEW: If Python blocked it as "Invalid Image", send that to the user! Do not simulate! ---
+    if (err.message.includes('Invalid Image')) {
+        return res.status(400).json({ error: err.message })
+    }
     console.warn('AI engine unavailable, using simulated diagnosis:', err.message)
     diagnosis = simulateDiagnosis(req.file?.originalname || '', req.file?.size || 0)
   }
@@ -219,7 +232,7 @@ app.post('/api/diagnosis/scan', upload.single('image'), async (req, res) => {
   const { disease_result, confidence, affected_area_pct, severity, heatmap = null } = diagnosis
   const id = randomUUID()
   const now = new Date().toISOString().slice(0, 19).replace('T', ' ')
-  db.prepare(`INSERT INTO disease_scans (id, user_id, farm_id, image_url, heatmap, disease_result, confidence, severity, affected_area_pct, notes, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(id, user_id||null, farm_id||null, image_url, heatmap, disease_result, confidence, severity, affected_area_pct, notes||null, now)
+  db.prepare(`INSERT INTO disease_scans (id, user_id, farm_id, image_url, disease_result, confidence, severity, affected_area_pct, notes, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(id, user_id||null, farm_id||null, image_url, disease_result, confidence, severity, affected_area_pct, notes||null, now)
   res.json({ id, disease_result, confidence, affected_area_pct, severity, heatmap, image_url, created_at: now })
 })
 
@@ -273,8 +286,6 @@ app.get('/api/farms/map', (req, res) => {
         (SELECT disease_result FROM disease_scans WHERE farm_id = f.id ORDER BY created_at DESC LIMIT 1) as last_scan_result,
         (SELECT confidence FROM disease_scans WHERE farm_id = f.id ORDER BY created_at DESC LIMIT 1) as last_scan_confidence,
         (SELECT severity FROM disease_scans WHERE farm_id = f.id ORDER BY created_at DESC LIMIT 1) as last_scan_severity,
-        (SELECT image_url FROM disease_scans WHERE farm_id = f.id ORDER BY created_at DESC LIMIT 1) as last_scan_image_url,
-        (SELECT heatmap FROM disease_scans WHERE farm_id = f.id ORDER BY created_at DESC LIMIT 1) as last_scan_heatmap,
         (SELECT created_at FROM disease_scans WHERE farm_id = f.id ORDER BY created_at DESC LIMIT 1) as last_scan_at,
         (SELECT status FROM certifications WHERE farm_id = f.id ORDER BY created_at DESC LIMIT 1) as cert_status
       FROM farms f
