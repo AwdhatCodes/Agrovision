@@ -42,23 +42,45 @@ const DISEASE_INFO = {
   },
 }
 
-// --- NEW: AI Processing Matrix Component ---
+// --- GPS Helper ---
+// Returns { lat, lng } or null if denied / unavailable / timed out
+const getCoordinates = () =>
+  new Promise((resolve) => {
+    if (!navigator.geolocation) return resolve(null)
+
+    const timeout = setTimeout(() => resolve(null), 5000)
+
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        clearTimeout(timeout)
+        resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude })
+      },
+      () => {
+        clearTimeout(timeout) // denied or failed → scan proceeds anyway
+        resolve(null)
+      },
+      { enableHighAccuracy: true, timeout: 5000 }
+    )
+  })
+// ------------------
+
+// --- AI Processing Matrix Component ---
 const ProcessingMatrix = () => {
-  const [step, setStep] = useState(0);
+  const [step, setStep] = useState(0)
   const steps = [
-    "> Initializing AI neural network...",
-    "> Extracting leaf morphological features...",
-    "> Running Grad-CAM activation mapping...",
-    "> Calculating disease severity index...",
-    "> Finalizing diagnostic report..."
-  ];
+    '> Initializing AI neural network...',
+    '> Extracting leaf morphological features...',
+    '> Running Grad-CAM activation mapping...',
+    '> Calculating disease severity index...',
+    '> Finalizing diagnostic report...',
+  ]
 
   useEffect(() => {
     const interval = setInterval(() => {
-      setStep((prev) => (prev < steps.length - 1 ? prev + 1 : prev));
-    }, 800);
-    return () => clearInterval(interval);
-  }, []);
+      setStep((prev) => (prev < steps.length - 1 ? prev + 1 : prev))
+    }, 800)
+    return () => clearInterval(interval)
+  }, [])
 
   return (
     <div style={{ textAlign: 'left', padding: '15px 20px', background: '#0a0a0a', borderRadius: 8, border: '1px solid #333' }}>
@@ -70,9 +92,8 @@ const ProcessingMatrix = () => {
         {steps[step]}
       </p>
     </div>
-  );
-};
-// -------------------------------------------
+  )
+}
 
 function ConfidenceRing({ value, color }) {
   const r = 36
@@ -94,10 +115,9 @@ function ResultCard({ result, onReset, onAskDisease }) {
   const [expanded, setExpanded] = useState({ symptoms: true, treatment: false, prevention: false })
   const toggle = k => setExpanded(e => ({ ...e, [k]: !e[k] }))
 
-  // --- NEW: PDF Export Function ---
   const downloadPDFReport = () => {
-    const printWindow = window.open('', '_blank');
-    const date = new Date().toLocaleString();
+    const printWindow = window.open('', '_blank')
+    const date = new Date().toLocaleString()
     const html = `
       <html>
         <head>
@@ -121,6 +141,9 @@ function ResultCard({ result, onReset, onAskDisease }) {
           <div class="header">
             <h1 class="title">Agrovision AI Diagnostic Report</h1>
             <p style="color: #6b7280; margin-top: 5px;">Generated on: ${date}</p>
+            ${result.latitude && result.longitude
+              ? `<p style="color: #6b7280; font-size: 13px; margin-top: 4px;">📍 Location: ${parseFloat(result.latitude).toFixed(5)}, ${parseFloat(result.longitude).toFixed(5)}</p>`
+              : ''}
           </div>
           
           <div class="badge">${info.icon} ${info.label} (${Math.round(result.confidence)}% Confidence)</div>
@@ -155,11 +178,10 @@ function ResultCard({ result, onReset, onAskDisease }) {
           </script>
         </body>
       </html>
-    `;
-    printWindow.document.write(html);
-    printWindow.document.close();
+    `
+    printWindow.document.write(html)
+    printWindow.document.close()
   }
-  // ----------------------------------
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -189,6 +211,13 @@ function ResultCard({ result, onReset, onAskDisease }) {
                   {info.pathogen}
                 </span>
               )}
+              {/* --- GPS COORDINATES BADGE (shown only when available) --- */}
+              {result.latitude && result.longitude && (
+                <span style={{ fontSize: 12, color: 'var(--text3)', background: 'var(--bg3)', padding: '3px 10px', borderRadius: 6 }}>
+                  📍 {parseFloat(result.latitude).toFixed(4)}, {parseFloat(result.longitude).toFixed(4)}
+                </span>
+              )}
+              {/* -------------------------------------------------------- */}
             </div>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10, flexShrink: 0, minWidth: 160 }}>
@@ -206,6 +235,7 @@ function ResultCard({ result, onReset, onAskDisease }) {
           </div>
         </div>
       </div>
+
       {result.heatmap && (
         <div className="card" style={{ overflow: 'hidden', padding: 0, border: `2px solid ${info.color}40` }}>
           <div style={{ padding: '12px 18px', background: 'var(--bg3)', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -215,10 +245,10 @@ function ResultCard({ result, onReset, onAskDisease }) {
             </span>
           </div>
           <div style={{ position: 'relative', background: '#000' }}>
-            <img 
-              src={result.heatmap} 
-              alt="AI Diagnostic Heatmap" 
-              style={{ width: '100%', maxHeight: 380, objectFit: 'contain', display: 'block' }} 
+            <img
+              src={result.heatmap}
+              alt="AI Diagnostic Heatmap"
+              style={{ width: '100%', maxHeight: 380, objectFit: 'contain', display: 'block' }}
             />
             <div style={{ position: 'absolute', bottom: 12, left: 16, background: 'rgba(0,0,0,0.7)', padding: '4px 10px', borderRadius: 6 }}>
               <p style={{ fontSize: 11, fontWeight: 600, color: '#fff', margin: 0 }}>
@@ -228,7 +258,6 @@ function ResultCard({ result, onReset, onAskDisease }) {
           </div>
         </div>
       )}
-      {/* -------------------------------------- */}
 
       {[
         { key: 'symptoms', label: 'Symptoms Detected', icon: <AlertTriangle size={14} />, items: info.symptoms, color: '#f59e0b' },
@@ -321,19 +350,32 @@ export default function DiagnosisPage({ user, onDiseaseDetected, onAskDisease })
     }, 'image/jpeg', 0.9)
   }
 
-  const analyze = async () => {
+  // ✅ FIXED — GPS resolves first, THEN scanning UI appears
+const analyze = async () => {
     if (!image) return
-    setScanning(true)
+
     try {
+      const coords = await getCoordinates()  // ← popup shows on clean screen
+      setScanning(true)                       // ← matrix appears after GPS done
+
       const fd = new FormData()
       fd.append('image', image)
       if (user?.id) fd.append('user_id', user.id)
-      const res = await fetch('/api/diagnosis/scan', { method: 'POST', body: fd })
+
+      // Only append coordinates when the farmer granted permission
+      if (coords) {
+        fd.append('latitude', coords.lat)
+        fd.append('longitude', coords.lng)
+      }
+
+      const res = await fetch('https://rug-duration-chatter.ngrok-free.dev/api/diagnosis/scan', { method: 'POST', body: fd })
       const data = await res.json()
+
       if (!res.ok || data.error) {
-    alert("AI SECURITY ALERT: " + (data.error || "Upload failed."));
-    return; // This stops the UI from defaulting to 'Healthy'
-}
+        alert('AI SECURITY ALERT: ' + (data.error || 'Upload failed.'))
+        return
+      }
+
       setResult(data)
       setHistory(h => [data, ...h.slice(0, 9)])
       if (data?.disease_result) {
@@ -345,6 +387,7 @@ export default function DiagnosisPage({ user, onDiseaseDetected, onAskDisease })
       setScanning(false)
     }
   }
+  // ------------------------------------------------------------
 
   const reset = () => { setImage(null); setPreview(null); setResult(null); stopCamera(); onDiseaseDetected?.(null) }
 
@@ -358,7 +401,6 @@ export default function DiagnosisPage({ user, onDiseaseDetected, onAskDisease })
       {!result ? (
         <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.3fr) minmax(0,1fr)', gap: 20 }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            {/* Camera or upload panel */}
             {cameraActive ? (
               <div className="card" style={{ overflow: 'hidden', padding: 0 }}>
                 <video ref={videoRef} autoPlay playsInline style={{ width: '100%', display: 'block', maxHeight: 340, objectFit: 'cover', background: '#000' }} />
@@ -380,7 +422,6 @@ export default function DiagnosisPage({ user, onDiseaseDetected, onAskDisease })
                   </button>
                 </div>
                 <div style={{ padding: 16 }}>
-                  {/* --- NEW: THE PROCESSING MATRIX TRIGGER --- */}
                   {scanning ? (
                     <ProcessingMatrix />
                   ) : (
@@ -388,7 +429,6 @@ export default function DiagnosisPage({ user, onDiseaseDetected, onAskDisease })
                       <Zap size={16} /> Scan for Disease
                     </button>
                   )}
-                  {/* ---------------------------------------- */}
                 </div>
               </div>
             ) : (
@@ -413,7 +453,6 @@ export default function DiagnosisPage({ user, onDiseaseDetected, onAskDisease })
               </div>
             )}
 
-            {/* Tips */}
             <div className="card" style={{ padding: '16px 20px' }}>
               <h4 style={{ fontSize: 13, fontWeight: 600, marginBottom: 10, color: 'var(--text2)' }}>📸 Photo tips for best results</h4>
               <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: 7 }}>
@@ -426,7 +465,6 @@ export default function DiagnosisPage({ user, onDiseaseDetected, onAskDisease })
             </div>
           </div>
 
-          {/* History panel */}
           <div>
             <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 12, color: 'var(--text2)' }}>Recent Scans</h3>
             {history.length === 0 ? (
@@ -452,7 +490,6 @@ export default function DiagnosisPage({ user, onDiseaseDetected, onAskDisease })
               </div>
             )}
 
-            {/* Disease legend */}
             <div className="card" style={{ marginTop: 14, padding: '16px 18px' }}>
               <h4 style={{ fontSize: 13, fontWeight: 600, marginBottom: 12, color: 'var(--text2)' }}>Disease Guide</h4>
               {Object.entries(DISEASE_INFO).map(([key, info]) => (

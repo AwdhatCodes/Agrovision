@@ -133,30 +133,43 @@ db.exec(`
     severity TEXT NOT NULL,
     affected_area_pct REAL DEFAULT 0,
     notes TEXT,
+    scan_lat REAL,
+    scan_lng REAL,
     created_at TEXT DEFAULT (datetime('now'))
   );
 `)
 
+// ── Safe column migrations (runs on every startup, skips if column already exists) ──
 const addCol = (table, col, def) => {
   const cols = db.prepare(`PRAGMA table_info(${table})`).all().map(c => c.name)
   if (!cols.includes(col)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${col} ${def}`)
 }
+
+// Farms
 addCol('farms', 'lat', 'REAL DEFAULT 0')
 addCol('farms', 'lng', 'REAL DEFAULT 0')
 addCol('farms', 'owner_email', 'TEXT')
 addCol('farms', 'owner_phone', 'TEXT')
 addCol('farms', 'certified_clean', 'INTEGER DEFAULT 0')
 addCol('farms', 'user_id', 'TEXT')
+
+// Users
 addCol('users', 'buyer_lat', 'REAL')
 addCol('users', 'buyer_lng', 'REAL')
 addCol('users', 'buyer_region', 'TEXT')
 addCol('users', 'buyer_location', 'TEXT')
+
+// Products
 addCol('products', 'quarantined', 'INTEGER DEFAULT 0')
 addCol('products', 'disease_type', 'TEXT DEFAULT "none"')
 addCol('products', 'views', 'INTEGER DEFAULT 0')
 addCol('products', 'description', 'TEXT DEFAULT ""')
+
+// Region / alerts
 addCol('region_disease_risk', 'blight_type', 'TEXT DEFAULT "none"')
 addCol('disease_alerts', 'blight_type', 'TEXT DEFAULT "early_blight"')
+
+// Sales
 addCol('sales', 'buyer_name', 'TEXT')
 addCol('sales', 'buyer_lat', 'REAL')
 addCol('sales', 'buyer_lng', 'REAL')
@@ -164,6 +177,11 @@ addCol('sales', 'buyer_location', 'TEXT')
 addCol('sales', 'payment_method', 'TEXT DEFAULT "card"')
 addCol('sales', 'payment_reference', 'TEXT')
 addCol('sales', 'payment_status', 'TEXT DEFAULT "paid"')
+
+// ── GPS columns for disease_scans (the new addition) ──
+addCol('disease_scans', 'scan_lat', 'REAL')
+addCol('disease_scans', 'scan_lng', 'REAL')
+// ─────────────────────────────────────────────────────
 
 const seedData = db.transaction(() => {
   const insertFarm = db.prepare(`INSERT OR IGNORE INTO farms (id, name, region, disease_safe, certified_clean, rating, rating_count, lat, lng, owner_email, owner_phone) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
@@ -226,20 +244,20 @@ const seedData = db.transaction(() => {
 
   const insertSale = db.prepare(`INSERT OR IGNORE INTO sales (id, product_id, farm_id, quantity, revenue, buyer_region, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`)
   const salesData = [
-    ['sale-1', 'prod-1', 'farm-1', 20, 7000.00, 'Nakuru County', '2026-01-10'],
-    ['sale-2', 'prod-1', 'farm-1', 35, 12250.00, 'Meru County', '2026-02-05'],
-    ['sale-3', 'prod-1', 'farm-1', 10, 3500.00, 'Nyandarua County', '2026-03-14'],
-    ['sale-4', 'prod-1', 'farm-1',  5, 1750.00, 'Uasin Gishu', '2026-04-20'],
-    ['sale-5', 'prod-3', 'farm-2', 30, 8400.00, 'Nakuru County', '2026-01-15'],
-    ['sale-6', 'prod-3', 'farm-2', 25, 7000.00, 'Nyandarua County', '2026-02-22'],
-    ['sale-7', 'prod-3', 'farm-2', 40, 11200.00, 'Meru County', '2026-03-30'],
-    ['sale-8', 'prod-5', 'farm-1', 15, 9750.00, 'Nakuru County', '2026-02-12'],
-    ['sale-9', 'prod-5', 'farm-1', 20, 13000.00, 'Meru County', '2026-04-01'],
-    ['sale-10','prod-2', 'farm-3', 10, 32000.00, 'Nyandarua County', '2026-01-28'],
-    ['sale-11','prod-2', 'farm-3',  8, 25600.00, 'Uasin Gishu', '2026-03-08'],
-    ['sale-12','prod-4', 'farm-2', 50, 9000.00, 'Nakuru County', '2026-04-15'],
-    ['sale-13','prod-8', 'farm-5', 25, 14500.00, 'Nyandarua County', '2026-03-20'],
-    ['sale-14','prod-10','farm-1', 30, 15600.00, 'Nakuru County', '2026-04-10'],
+    ['sale-1',  'prod-1',  'farm-1', 20,  7000.00, 'Nakuru County',    '2026-01-10'],
+    ['sale-2',  'prod-1',  'farm-1', 35, 12250.00, 'Meru County',      '2026-02-05'],
+    ['sale-3',  'prod-1',  'farm-1', 10,  3500.00, 'Nyandarua County', '2026-03-14'],
+    ['sale-4',  'prod-1',  'farm-1',  5,  1750.00, 'Uasin Gishu',      '2026-04-20'],
+    ['sale-5',  'prod-3',  'farm-2', 30,  8400.00, 'Nakuru County',    '2026-01-15'],
+    ['sale-6',  'prod-3',  'farm-2', 25,  7000.00, 'Nyandarua County', '2026-02-22'],
+    ['sale-7',  'prod-3',  'farm-2', 40, 11200.00, 'Meru County',      '2026-03-30'],
+    ['sale-8',  'prod-5',  'farm-1', 15,  9750.00, 'Nakuru County',    '2026-02-12'],
+    ['sale-9',  'prod-5',  'farm-1', 20, 13000.00, 'Meru County',      '2026-04-01'],
+    ['sale-10', 'prod-2',  'farm-3', 10, 32000.00, 'Nyandarua County', '2026-01-28'],
+    ['sale-11', 'prod-2',  'farm-3',  8, 25600.00, 'Uasin Gishu',      '2026-03-08'],
+    ['sale-12', 'prod-4',  'farm-2', 50,  9000.00, 'Nakuru County',    '2026-04-15'],
+    ['sale-13', 'prod-8',  'farm-5', 25, 14500.00, 'Nyandarua County', '2026-03-20'],
+    ['sale-14', 'prod-10', 'farm-1', 30, 15600.00, 'Nakuru County',    '2026-04-10'],
   ]
   salesData.forEach(s => insertSale.run(...s))
 })

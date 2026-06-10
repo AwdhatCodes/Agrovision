@@ -38,16 +38,16 @@ function haversine(lat1, lng1, lat2, lng2) {
 }
 
 const KENYA_PLACES = [
-  { name: 'Ngong', county: 'Kajiado County', lat: -1.3527, lng: 36.6699 },
-  { name: 'Ongata Rongai', county: 'Kajiado County', lat: -1.3976, lng: 36.7649 },
-  { name: 'Karen', county: 'Nairobi County', lat: -1.3197, lng: 36.7061 },
-  { name: 'Kiserian', county: 'Kajiado County', lat: -1.4282, lng: 36.6867 },
-  { name: 'Nairobi', county: 'Nairobi County', lat: -1.2864, lng: 36.8172 },
-  { name: 'Kikuyu', county: 'Kiambu County', lat: -1.2463, lng: 36.6629 },
-  { name: 'Kiambu', county: 'Kiambu County', lat: -1.1714, lng: 36.8356 },
-  { name: 'Nakuru', county: 'Nakuru County', lat: -0.3031, lng: 36.0800 },
-  { name: 'Meru', county: 'Meru County', lat: 0.0463, lng: 37.6559 },
-  { name: 'Eldoret', county: 'Uasin Gishu County', lat: 0.5143, lng: 35.2698 },
+  { name: 'Ngong',         county: 'Kajiado County',     lat: -1.3527, lng: 36.6699 },
+  { name: 'Ongata Rongai', county: 'Kajiado County',     lat: -1.3976, lng: 36.7649 },
+  { name: 'Karen',         county: 'Nairobi County',     lat: -1.3197, lng: 36.7061 },
+  { name: 'Kiserian',      county: 'Kajiado County',     lat: -1.4282, lng: 36.6867 },
+  { name: 'Nairobi',       county: 'Nairobi County',     lat: -1.2864, lng: 36.8172 },
+  { name: 'Kikuyu',        county: 'Kiambu County',      lat: -1.2463, lng: 36.6629 },
+  { name: 'Kiambu',        county: 'Kiambu County',      lat: -1.1714, lng: 36.8356 },
+  { name: 'Nakuru',        county: 'Nakuru County',      lat: -0.3031, lng: 36.0800 },
+  { name: 'Meru',          county: 'Meru County',        lat:  0.0463, lng: 37.6559 },
+  { name: 'Eldoret',       county: 'Uasin Gishu County', lat:  0.5143, lng: 35.2698 },
 ]
 
 function inferBuyerRegion(lat, lng) {
@@ -73,7 +73,6 @@ function parseBuyerCoords(body = {}) {
 
 // Simulate AI disease diagnosis
 function simulateDiagnosis(filename = '', fileSize = 0) {
-  // Use filename and size to produce deterministic-ish results
   const hash = [...(filename + fileSize)].reduce((a, c) => a + c.charCodeAt(0), 0)
   const rand = (hash % 100) / 100
 
@@ -125,8 +124,7 @@ async function runAiDiagnosis(file) {
   formData.append('file', new Blob([fileBuffer], { type: file.mimetype || 'application/octet-stream' }), file.originalname)
 
   const response = await fetch(`${AI_ENGINE_URL}/predict`, { method: 'POST', body: formData })
-  
-  // --- NEW: Read the exact error message from Python if it fails ---
+
   if (!response.ok) {
     let errorMsg = `AI engine responded with ${response.status}`
     try {
@@ -217,13 +215,19 @@ app.post('/api/diagnosis/scan', upload.single('image'), async (req, res) => {
   const { user_id, farm_id, notes } = req.body
   const image_url = req.file ? `/uploads/${req.file.filename}` : null
 
+  // ── Extract GPS coordinates sent by the frontend ──
+  const scan_lat = req.body.latitude  ? parseFloat(req.body.latitude)  : null
+  const scan_lng = req.body.longitude ? parseFloat(req.body.longitude) : null
+  const hasCoords = scan_lat !== null && scan_lng !== null &&
+                    Number.isFinite(scan_lat) && Number.isFinite(scan_lng)
+  // ─────────────────────────────────────────────────
+
   let diagnosis
   try {
     diagnosis = req.file ? await runAiDiagnosis(req.file) : simulateDiagnosis('', 0)
   } catch (err) {
-    // --- NEW: If Python blocked it as "Invalid Image", send that to the user! Do not simulate! ---
     if (err.message.includes('Invalid Image')) {
-        return res.status(400).json({ error: err.message })
+      return res.status(400).json({ error: err.message })
     }
     console.warn('AI engine unavailable, using simulated diagnosis:', err.message)
     diagnosis = simulateDiagnosis(req.file?.originalname || '', req.file?.size || 0)
@@ -232,8 +236,86 @@ app.post('/api/diagnosis/scan', upload.single('image'), async (req, res) => {
   const { disease_result, confidence, affected_area_pct, severity, heatmap = null } = diagnosis
   const id = randomUUID()
   const now = new Date().toISOString().slice(0, 19).replace('T', ' ')
-  db.prepare(`INSERT INTO disease_scans (id, user_id, farm_id, image_url, disease_result, confidence, severity, affected_area_pct, notes, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(id, user_id||null, farm_id||null, image_url, disease_result, confidence, severity, affected_area_pct, notes||null, now)
-  res.json({ id, disease_result, confidence, affected_area_pct, severity, heatmap, image_url, created_at: now })
+
+  // ── Save scan result including GPS coordinates ──
+  db.prepare(`
+    INSERT INTO disease_scans
+      (id, user_id, farm_id, image_url, disease_result, confidence, severity, affected_area_pct, notes, scan_lat, scan_lng, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    id,
+    user_id  || null,
+    farm_id  || null,
+    image_url,
+    disease_result,
+    confidence,
+    severity,
+    affected_area_pct,
+    notes    || null,
+    hasCoords ? scan_lat : null,
+    hasCoords ? scan_lng : null,
+    now
+  )
+  // ───────────────────────────────────────────────
+
+  // ── Auto-update Blight Map when disease is found AND we have coordinates ──
+  if (hasCoords && disease_result !== 'healthy') {
+    // Reuse existing inferBuyerRegion() to convert coordinates → county name
+    const region = inferBuyerRegion(scan_lat, scan_lng)
+
+    const existing = db.prepare(`SELECT * FROM region_disease_risk WHERE region = ?`).get(region)
+    const newCount = (existing?.detection_count || 0) + 1
+
+    // Escalation logic: 1 detection = low, 2–4 = watch, 5+ = outbreak
+   const risk_level = newCount >= 5 ? 'outbreak' : newCount >= 2 ? 'watch' : 'safe'
+
+    db.prepare(`
+      INSERT INTO region_disease_risk (region, risk_level, detection_count, blight_type, updated_at)
+      VALUES (?, ?, ?, ?, datetime('now'))
+      ON CONFLICT(region) DO UPDATE SET
+        risk_level      = excluded.risk_level,
+        detection_count = excluded.detection_count,
+        blight_type     = excluded.blight_type,
+        updated_at      = excluded.updated_at
+    `).run(region, risk_level, newCount, disease_result)
+
+    // Create an alert when a region tips into watch or outbreak
+    if (risk_level === 'watch' || risk_level === 'outbreak') {
+      const blightLabel = disease_result === 'late_blight' ? 'Late Blight' : 'Early Blight'
+      const msg = risk_level === 'outbreak'
+        ? `${blightLabel} outbreak in ${region} — ${newCount} GPS-confirmed detections via AgroVision AI.`
+        : `${blightLabel} activity detected in ${region} (${newCount} AI scan detections). Farmers advised to inspect crops.`
+
+      db.prepare(`
+        INSERT INTO disease_alerts (id, region, message, severity, blight_type, simulated_email, simulated_sms, created_at)
+        VALUES (?, ?, ?, ?, ?, 1, 1, datetime('now'))
+      `).run(randomUUID(), region, msg, risk_level, disease_result)
+
+      // Auto-quarantine farm listings if region hits outbreak
+      if (risk_level === 'outbreak') {
+        db.prepare(`SELECT id FROM farms WHERE region = ?`).all(region).forEach(f => {
+          db.prepare(`UPDATE products SET quarantined = 1 WHERE farm_id = ? AND status = 'approved'`).run(f.id)
+        })
+      }
+    }
+
+    console.log(`[Blight Map] ${region} → ${risk_level} (${newCount} detections) | ${disease_result}`)
+  }
+  // ─────────────────────────────────────────────────────────────────────────
+
+  // ── Echo coordinates back so ResultCard badge and PDF report can show them ──
+  res.json({
+    id,
+    disease_result,
+    confidence,
+    affected_area_pct,
+    severity,
+    heatmap,
+    image_url,
+    created_at: now,
+    latitude:  hasCoords ? scan_lat : null,
+    longitude: hasCoords ? scan_lng : null,
+  })
 })
 
 app.get('/api/diagnosis/history', (req, res) => {
@@ -322,7 +404,6 @@ app.post('/api/farms', (req, res) => {
   res.status(201).json(db.prepare('SELECT * FROM farms WHERE id=?').get(id))
 })
 
-// Update farm details (including location)
 app.put('/api/farms/:id', (req, res) => {
   const { name, region, lat, lng, owner_email, owner_phone, disease_safe } = req.body
   const ex = db.prepare('SELECT * FROM farms WHERE id=?').get(req.params.id)
@@ -361,10 +442,10 @@ app.get('/api/products', (req, res) => {
     query += ` AND p.id IN (${ids.map(()=>'?').join(',')})`;  params.push(...ids)
   }
   if (category) { query += ' AND p.category=?'; params.push(category) }
-  if (region) { query += ' AND f.region=?'; params.push(region) }
+  if (region)   { query += ' AND f.region=?';   params.push(region) }
   if (disease_safe === 'true') query += ' AND f.disease_safe=1'
-  if (certified === 'true') query += ' AND f.certified_clean=1'
-  if (sort === 'price_asc') query += ' ORDER BY p.price ASC'
+  if (certified === 'true')    query += ' AND f.certified_clean=1'
+  if (sort === 'price_asc')   query += ' ORDER BY p.price ASC'
   else if (sort === 'price_desc') query += ' ORDER BY p.price DESC'
   else if (sort === 'rating') query += ' ORDER BY product_rating DESC'
   else query += ' ORDER BY p.created_at DESC'
@@ -418,11 +499,11 @@ app.delete('/api/products/:id', (req, res) => {
   res.json({ success: true })
 })
 
-app.patch('/api/products/:id/archive', (req, res) => { db.prepare(`UPDATE products SET status='archived' WHERE id=?`).run(req.params.id); res.json({ success: true }) })
-app.patch('/api/products/:id/approve', (req, res) => { db.prepare(`UPDATE products SET status='approved' WHERE id=?`).run(req.params.id); res.json(db.prepare(`SELECT p.*, f.name as farm_name, f.region FROM products p JOIN farms f ON p.farm_id=f.id WHERE p.id=?`).get(req.params.id)) })
-app.patch('/api/products/:id/reject', (req, res) => { db.prepare(`UPDATE products SET status='archived' WHERE id=?`).run(req.params.id); res.json({ success: true }) })
-app.patch('/api/products/:id/quarantine', (req, res) => { db.prepare(`UPDATE products SET quarantined=1 WHERE id=?`).run(req.params.id); res.json({ success: true }) })
-app.patch('/api/products/:id/unquarantine', (req, res) => { db.prepare(`UPDATE products SET quarantined=0 WHERE id=?`).run(req.params.id); res.json({ success: true }) })
+app.patch('/api/products/:id/archive',     (req, res) => { db.prepare(`UPDATE products SET status='archived' WHERE id=?`).run(req.params.id); res.json({ success: true }) })
+app.patch('/api/products/:id/approve',     (req, res) => { db.prepare(`UPDATE products SET status='approved' WHERE id=?`).run(req.params.id); res.json(db.prepare(`SELECT p.*, f.name as farm_name, f.region FROM products p JOIN farms f ON p.farm_id=f.id WHERE p.id=?`).get(req.params.id)) })
+app.patch('/api/products/:id/reject',      (req, res) => { db.prepare(`UPDATE products SET status='archived' WHERE id=?`).run(req.params.id); res.json({ success: true }) })
+app.patch('/api/products/:id/quarantine',  (req, res) => { db.prepare(`UPDATE products SET quarantined=1 WHERE id=?`).run(req.params.id); res.json({ success: true }) })
+app.patch('/api/products/:id/unquarantine',(req, res) => { db.prepare(`UPDATE products SET quarantined=0 WHERE id=?`).run(req.params.id); res.json({ success: true }) })
 
 // ── REVIEWS ──
 app.get('/api/reviews', (req, res) => {
@@ -430,7 +511,7 @@ app.get('/api/reviews', (req, res) => {
   let q = `SELECT r.*, p.name as product_name FROM reviews r JOIN products p ON p.id=r.product_id WHERE 1=1`
   const params = []
   if (product_id) { q += ' AND r.product_id=?'; params.push(product_id) }
-  if (farm_id) { q += ' AND r.farm_id=?'; params.push(farm_id) }
+  if (farm_id)    { q += ' AND r.farm_id=?';    params.push(farm_id) }
   if (approved !== undefined) { q += ' AND r.approved=?'; params.push(parseInt(approved)) }
   q += ' ORDER BY r.created_at DESC'
   res.json(db.prepare(q).all(...params))
@@ -443,17 +524,17 @@ app.post('/api/reviews', (req, res) => {
   if (!product) return res.status(404).json({ error: 'Product not found' })
   const id = randomUUID()
   db.prepare(`INSERT INTO reviews (id,product_id,farm_id,rating,comment,buyer_name) VALUES (?,?,?,?,?,?)`).run(id, product_id, product.farm_id, parseInt(rating), comment||null, buyer_name)
-  const cnt = db.prepare(`SELECT COUNT(*) as cnt FROM reviews WHERE farm_id=? AND approved=1`).get(product.farm_id)
+  const cnt    = db.prepare(`SELECT COUNT(*) as cnt FROM reviews WHERE farm_id=? AND approved=1`).get(product.farm_id)
   const farmAvg = db.prepare(`SELECT AVG(rating) as avg FROM reviews WHERE farm_id=? AND approved=1`).get(product.farm_id)
   db.prepare(`UPDATE farms SET rating=?,rating_count=? WHERE id=?`).run(Math.round(farmAvg.avg*10)/10, cnt.cnt, product.farm_id)
   res.status(201).json(db.prepare('SELECT * FROM reviews WHERE id=?').get(id))
 })
 
 app.patch('/api/reviews/:id/approve', (req, res) => { db.prepare(`UPDATE reviews SET approved=1 WHERE id=?`).run(req.params.id); res.json({ success: true }) })
-app.patch('/api/reviews/:id/reject', (req, res) => { db.prepare(`UPDATE reviews SET approved=0 WHERE id=?`).run(req.params.id); res.json({ success: true }) })
-app.delete('/api/reviews/:id', (req, res) => { db.prepare(`DELETE FROM reviews WHERE id=?`).run(req.params.id); res.json({ success: true }) })
+app.patch('/api/reviews/:id/reject',  (req, res) => { db.prepare(`UPDATE reviews SET approved=0 WHERE id=?`).run(req.params.id); res.json({ success: true }) })
+app.delete('/api/reviews/:id',        (req, res) => { db.prepare(`DELETE FROM reviews WHERE id=?`).run(req.params.id); res.json({ success: true }) })
 
-// ── CERTIFICATIONS ──
+// ── CHECKOUT ──
 app.post('/api/checkout', (req, res) => {
   try {
     const { product_id, quantity = 1, payment_method, buyer_name, buyer_region, buyer_location, phone, email, card_last4 } = req.body
@@ -467,9 +548,9 @@ app.post('/api/checkout', (req, res) => {
     const product = db.prepare("SELECT * FROM products WHERE id=? AND status='approved' AND quarantined=0").get(product_id)
     if (!product) return res.status(404).json({ error: 'Product is not available for checkout' })
     if (product.quantity < qty) return res.status(409).json({ error: 'Not enough stock available' })
-    if (payment_method === 'mpesa' && !phone?.trim()) return res.status(400).json({ error: 'M-Pesa phone number required' })
-    if (payment_method === 'paypal' && !email?.trim()) return res.status(400).json({ error: 'PayPal email required' })
-    if (payment_method === 'card' && !card_last4?.trim()) return res.status(400).json({ error: 'Card last four digits required' })
+    if (payment_method === 'mpesa'  && !phone?.trim())     return res.status(400).json({ error: 'M-Pesa phone number required' })
+    if (payment_method === 'paypal' && !email?.trim())     return res.status(400).json({ error: 'PayPal email required' })
+    if (payment_method === 'card'   && !card_last4?.trim()) return res.status(400).json({ error: 'Card last four digits required' })
 
     const id = randomUUID()
     const referencePrefix = payment_method === 'mpesa' ? 'MPESA' : payment_method === 'paypal' ? 'PAYPAL' : 'CARD'
@@ -479,7 +560,7 @@ app.post('/api/checkout', (req, res) => {
     const createSale = db.transaction(() => {
       db.prepare('UPDATE products SET quantity=quantity-? WHERE id=?').run(qty, product_id)
       db.prepare(`INSERT INTO sales (id,product_id,farm_id,quantity,revenue,buyer_region,buyer_lat,buyer_lng,buyer_location,buyer_name,payment_method,payment_reference,payment_status)
-        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,'paid')`).run(id, product_id, product.farm_id, qty, revenue, buyer_region || null, buyer_lat, buyer_lng, buyer_location || null, buyer_name.trim(), payment_method, payment_reference)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,'paid')`).run(id, product_id, product.farm_id, qty, revenue, buyer_region||null, buyer_lat, buyer_lng, buyer_location||null, buyer_name.trim(), payment_method, payment_reference)
     })
     createSale()
 
@@ -498,9 +579,9 @@ app.post('/api/checkout-cart', (req, res) => {
     if (!Array.isArray(items) || items.length === 0) return res.status(400).json({ error: 'Cart is empty' })
     if (!allowedMethods.includes(payment_method)) return res.status(400).json({ error: 'Payment method required' })
     if (!buyer_name?.trim()) return res.status(400).json({ error: 'Buyer name required' })
-    if (payment_method === 'mpesa' && !phone?.trim()) return res.status(400).json({ error: 'M-Pesa phone number required' })
-    if (payment_method === 'paypal' && !email?.trim()) return res.status(400).json({ error: 'PayPal email required' })
-    if (payment_method === 'card' && !card_last4?.trim()) return res.status(400).json({ error: 'Card last four digits required' })
+    if (payment_method === 'mpesa'  && !phone?.trim())     return res.status(400).json({ error: 'M-Pesa phone number required' })
+    if (payment_method === 'paypal' && !email?.trim())     return res.status(400).json({ error: 'PayPal email required' })
+    if (payment_method === 'card'   && !card_last4?.trim()) return res.status(400).json({ error: 'Card last four digits required' })
 
     const normalized = items.map(item => ({ product_id: item.product_id, quantity: parseInt(item.quantity) }))
     if (normalized.some(item => !item.product_id || !Number.isInteger(item.quantity) || item.quantity < 1)) {
@@ -524,7 +605,7 @@ app.post('/api/checkout-cart', (req, res) => {
         const revenue = Math.round(item.product.price * item.quantity * 100) / 100
         db.prepare('UPDATE products SET quantity=quantity-? WHERE id=?').run(item.quantity, item.product_id)
         db.prepare(`INSERT INTO sales (id,product_id,farm_id,quantity,revenue,buyer_region,buyer_lat,buyer_lng,buyer_location,buyer_name,payment_method,payment_reference,payment_status)
-          VALUES (?,?,?,?,?,?,?,?,?,?,?,?,'paid')`).run(saleId, item.product_id, item.product.farm_id, item.quantity, revenue, buyer_region || null, buyer_lat, buyer_lng, buyer_location || null, buyer_name.trim(), payment_method, payment_reference)
+          VALUES (?,?,?,?,?,?,?,?,?,?,?,?,'paid')`).run(saleId, item.product_id, item.product.farm_id, item.quantity, revenue, buyer_region||null, buyer_lat, buyer_lng, buyer_location||null, buyer_name.trim(), payment_method, payment_reference)
       }
     })
     createSales()
@@ -536,6 +617,7 @@ app.post('/api/checkout-cart', (req, res) => {
   }
 })
 
+// ── CERTIFICATIONS ──
 app.get('/api/certifications', (req, res) => {
   const { farm_id } = req.query
   let q = `SELECT c.*, f.name as farm_name, f.region FROM certifications c JOIN farms f ON f.id=c.farm_id`
@@ -588,12 +670,12 @@ app.get('/api/seller/analytics', (req, res) => {
   const where = farm_id ? 'WHERE s.farm_id=?' : 'WHERE 1=1'
   const params = farm_id ? [farm_id] : []
   const totalRevenue = db.prepare(`SELECT COALESCE(SUM(revenue),0) as total FROM sales s ${where}`).get(...params)
-  const totalSales = db.prepare(`SELECT COALESCE(SUM(quantity),0) as total FROM sales s ${where}`).get(...params)
-  const totalViews = farm_id ? db.prepare(`SELECT COALESCE(SUM(views),0) as total FROM products WHERE farm_id=?`).get(farm_id) : db.prepare(`SELECT COALESCE(SUM(views),0) as total FROM products`).get()
-  const byProduct = db.prepare(`SELECT p.name,p.id,SUM(s.revenue) as revenue,SUM(s.quantity) as units,COUNT(s.id) as orders FROM sales s JOIN products p ON p.id=s.product_id ${where} GROUP BY s.product_id ORDER BY revenue DESC LIMIT 5`).all(...params)
-  const byMonth = db.prepare(`SELECT strftime('%Y-%m',s.created_at) as month,SUM(s.revenue) as revenue,SUM(s.quantity) as units FROM sales s ${where} GROUP BY month ORDER BY month`).all(...params)
-  const byRegion = db.prepare(`SELECT s.buyer_region,SUM(s.revenue) as revenue,SUM(s.quantity) as units FROM sales s ${where} GROUP BY s.buyer_region ORDER BY revenue DESC`).all(...params)
-  const alertImpact = db.prepare(`SELECT a.created_at as alert_date,a.region,a.blight_type,a.severity FROM disease_alerts a ORDER BY a.created_at`).all()
+  const totalSales   = db.prepare(`SELECT COALESCE(SUM(quantity),0) as total FROM sales s ${where}`).get(...params)
+  const totalViews   = farm_id ? db.prepare(`SELECT COALESCE(SUM(views),0) as total FROM products WHERE farm_id=?`).get(farm_id) : db.prepare(`SELECT COALESCE(SUM(views),0) as total FROM products`).get()
+  const byProduct    = db.prepare(`SELECT p.name,p.id,SUM(s.revenue) as revenue,SUM(s.quantity) as units,COUNT(s.id) as orders FROM sales s JOIN products p ON p.id=s.product_id ${where} GROUP BY s.product_id ORDER BY revenue DESC LIMIT 5`).all(...params)
+  const byMonth      = db.prepare(`SELECT strftime('%Y-%m',s.created_at) as month,SUM(s.revenue) as revenue,SUM(s.quantity) as units FROM sales s ${where} GROUP BY month ORDER BY month`).all(...params)
+  const byRegion     = db.prepare(`SELECT s.buyer_region,SUM(s.revenue) as revenue,SUM(s.quantity) as units FROM sales s ${where} GROUP BY s.buyer_region ORDER BY revenue DESC`).all(...params)
+  const alertImpact  = db.prepare(`SELECT a.created_at as alert_date,a.region,a.blight_type,a.severity FROM disease_alerts a ORDER BY a.created_at`).all()
   res.json({ totalRevenue: totalRevenue.total, totalSales: totalSales.total, totalViews: totalViews.total, byProduct, byMonth, byRegion, alertImpact })
 })
 
@@ -610,14 +692,14 @@ app.get('/api/delivery-estimate', (req, res) => {
 
 // ── STATS ──
 app.get('/api/stats', (req, res) => {
-  const total = db.prepare(`SELECT COUNT(*) as count FROM products WHERE status='approved'`).get()
-  const pending = db.prepare(`SELECT COUNT(*) as count FROM products WHERE status='pending'`).get()
-  const archived = db.prepare(`SELECT COUNT(*) as count FROM products WHERE status='archived'`).get()
+  const total       = db.prepare(`SELECT COUNT(*) as count FROM products WHERE status='approved'`).get()
+  const pending     = db.prepare(`SELECT COUNT(*) as count FROM products WHERE status='pending'`).get()
+  const archived    = db.prepare(`SELECT COUNT(*) as count FROM products WHERE status='archived'`).get()
   const quarantined = db.prepare(`SELECT COUNT(*) as count FROM products WHERE quarantined=1`).get()
-  const certified = db.prepare(`SELECT COUNT(*) as count FROM farms WHERE certified_clean=1`).get()
-  const byCategory = db.prepare(`SELECT category,COUNT(*) as count FROM products WHERE status='approved' GROUP BY category`).all()
-  const outbreaks = db.prepare(`SELECT COUNT(*) as count FROM region_disease_risk WHERE risk_level='outbreak'`).get()
-  const scans = db.prepare(`SELECT COUNT(*) as count FROM disease_scans`).get()
+  const certified   = db.prepare(`SELECT COUNT(*) as count FROM farms WHERE certified_clean=1`).get()
+  const byCategory  = db.prepare(`SELECT category,COUNT(*) as count FROM products WHERE status='approved' GROUP BY category`).all()
+  const outbreaks   = db.prepare(`SELECT COUNT(*) as count FROM region_disease_risk WHERE risk_level='outbreak'`).get()
+  const scans       = db.prepare(`SELECT COUNT(*) as count FROM disease_scans`).get()
   res.json({ total: total.count, pending: pending.count, archived: archived.count, quarantined: quarantined.count, certified: certified.count, byCategory, outbreaks: outbreaks.count, scans: scans.count })
 })
 
