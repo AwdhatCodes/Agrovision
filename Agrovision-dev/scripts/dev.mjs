@@ -5,8 +5,8 @@ import { dirname, join } from 'node:path'
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const root = join(__dirname, '..')
 const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm'
-const python = process.platform === 'win32' ? 'py' : 'python3'
-const pythonArgs = process.platform === 'win32' ? ['-3.11', 'app.py'] : ['app.py']
+const python = process.platform === 'win32' ? 'python' : 'python3'
+const pythonArgs = ['app.py']
 
 const processes = [
   spawn('node', ['server/index.js'], { cwd: root, shell: true, stdio: 'inherit' }),

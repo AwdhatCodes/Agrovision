@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react'
-import { Camera, Upload, X, Leaf, AlertTriangle, CheckCircle, Zap, ChevronDown, Clock, RefreshCw, Zap as HeatIcon } from 'lucide-react'
+import { Camera, Upload, X, Leaf, AlertTriangle, CheckCircle, Zap, ChevronDown, Clock, RefreshCw, Download } from 'lucide-react'
 
 const DISEASE_INFO = {
   healthy: {
@@ -42,6 +42,38 @@ const DISEASE_INFO = {
   },
 }
 
+// --- NEW: AI Processing Matrix Component ---
+const ProcessingMatrix = () => {
+  const [step, setStep] = useState(0);
+  const steps = [
+    "> Initializing AI neural network...",
+    "> Extracting leaf morphological features...",
+    "> Running Grad-CAM activation mapping...",
+    "> Calculating disease severity index...",
+    "> Finalizing diagnostic report..."
+  ];
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setStep((prev) => (prev < steps.length - 1 ? prev + 1 : prev));
+    }, 800);
+    return () => clearInterval(interval);
+  }, []);
+
+  return (
+    <div style={{ textAlign: 'left', padding: '15px 20px', background: '#0a0a0a', borderRadius: 8, border: '1px solid #333' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+        <span className="spinner" style={{ width: 14, height: 14, borderColor: '#4ade80', borderBottomColor: 'transparent', borderWidth: 2 }} />
+        <span style={{ color: '#4ade80', fontFamily: 'monospace', fontSize: 13, fontWeight: 700 }}>SYSTEM ACTIVE</span>
+      </div>
+      <p style={{ fontFamily: 'monospace', color: '#4ade80', fontSize: 13, margin: 0, opacity: 0.9 }}>
+        {steps[step]}
+      </p>
+    </div>
+  );
+};
+// -------------------------------------------
+
 function ConfidenceRing({ value, color }) {
   const r = 36
   const circ = 2 * Math.PI * r
@@ -62,6 +94,73 @@ function ResultCard({ result, onReset, onAskDisease }) {
   const [expanded, setExpanded] = useState({ symptoms: true, treatment: false, prevention: false })
   const toggle = k => setExpanded(e => ({ ...e, [k]: !e[k] }))
 
+  // --- NEW: PDF Export Function ---
+  const downloadPDFReport = () => {
+    const printWindow = window.open('', '_blank');
+    const date = new Date().toLocaleString();
+    const html = `
+      <html>
+        <head>
+          <title>Agrovision Lab Report - ${result.id || 'Scan'}</title>
+          <style>
+            body { font-family: system-ui, sans-serif; color: #1a1a1a; padding: 40px; max-width: 800px; margin: 0 auto; }
+            .header { border-bottom: 2px solid #e5e7eb; padding-bottom: 20px; margin-bottom: 30px; }
+            .title { color: #166534; margin: 0; font-size: 28px; }
+            .badge { display: inline-block; padding: 6px 12px; background: ${info.bg}; color: ${info.color}; border: 1px solid ${info.border}; border-radius: 6px; font-weight: bold; font-size: 18px; margin-top: 10px; }
+            .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 30px; }
+            .box { padding: 15px; background: #f9fafb; border-radius: 8px; border: 1px solid #e5e7eb; }
+            .label { font-size: 12px; color: #6b7280; text-transform: uppercase; font-weight: bold; margin-bottom: 5px; }
+            .val { font-size: 16px; font-weight: bold; margin: 0; text-transform: capitalize; }
+            .heatmap { max-width: 100%; max-height: 400px; border-radius: 8px; border: 2px solid #e5e7eb; margin-top: 10px; object-fit: contain; }
+            h3 { border-bottom: 1px solid #e5e7eb; padding-bottom: 8px; margin-top: 30px; }
+            ul { padding-left: 20px; }
+            li { margin-bottom: 8px; }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <h1 class="title">Agrovision AI Diagnostic Report</h1>
+            <p style="color: #6b7280; margin-top: 5px;">Generated on: ${date}</p>
+          </div>
+          
+          <div class="badge">${info.icon} ${info.label} (${Math.round(result.confidence)}% Confidence)</div>
+          
+          <div class="grid" style="margin-top: 20px;">
+            <div class="box">
+              <div class="label">Severity Level</div>
+              <p class="val" style="color: ${info.color}">${result.severity}</p>
+            </div>
+            <div class="box">
+              <div class="label">Affected Leaf Area</div>
+              <p class="val">${result.affected_area_pct}%</p>
+            </div>
+          </div>
+
+          ${result.heatmap ? `
+            <h3>AI X-Ray (Grad-CAM Analysis)</h3>
+            <img src="${result.heatmap}" class="heatmap" />
+            <p style="font-size: 12px; color: #6b7280;">* Red/yellow zones indicate the exact pixel clusters the AI identified as diseased tissue.</p>
+          ` : ''}
+
+          <h3>Recommended Treatment Plan</h3>
+          <ul>
+            ${info.treatment.map(t => `<li>${t}</li>`).join('')}
+          </ul>
+
+          <div style="margin-top: 50px; padding-top: 20px; border-top: 1px dashed #ccc; font-size: 12px; color: #9ca3af; text-align: center;">
+            This is an AI-generated preliminary diagnostic report. Please consult with a certified agronomist for official verification.
+          </div>
+          <script>
+            window.onload = () => { setTimeout(() => { window.print(); window.close(); }, 500); }
+          </script>
+        </body>
+      </html>
+    `;
+    printWindow.document.write(html);
+    printWindow.document.close();
+  }
+  // ----------------------------------
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <div className="card" style={{ padding: '24px 28px', borderColor: info.border, background: info.bg }}>
@@ -78,7 +177,7 @@ function ResultCard({ result, onReset, onAskDisease }) {
             <p style={{ fontSize: 13, color: 'var(--text2)', marginBottom: 8, lineHeight: 1.6 }}>{info.description}</p>
             <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
               <span style={{ fontSize: 12, color: 'var(--text3)', background: 'var(--bg3)', padding: '3px 10px', borderRadius: 6 }}>
-                Severity: <strong style={{ color: info.color }}>{info.severity}</strong>
+                Severity: <strong style={{ color: info.color, textTransform: 'capitalize' }}>{result.severity}</strong>
               </span>
               {result.affected_area_pct > 0 && (
                 <span style={{ fontSize: 12, color: 'var(--text3)', background: 'var(--bg3)', padding: '3px 10px', borderRadius: 6 }}>
@@ -95,6 +194,9 @@ function ResultCard({ result, onReset, onAskDisease }) {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10, flexShrink: 0, minWidth: 160 }}>
             <button className="btn btn-secondary" onClick={onReset} style={{ padding: '8px 14px' }}>
               <RefreshCw size={14} /> New Scan
+            </button>
+            <button className="btn btn-secondary" onClick={downloadPDFReport} style={{ padding: '8px 14px', background: 'var(--bg3)', border: '1px solid var(--border)' }}>
+              <Download size={14} /> PDF Report
             </button>
             {result.disease_result !== 'healthy' && onAskDisease && (
               <button className="btn btn-primary" onClick={() => onAskDisease(result.disease_result)} style={{ padding: '8px 14px' }}>
@@ -228,6 +330,10 @@ export default function DiagnosisPage({ user, onDiseaseDetected, onAskDisease })
       if (user?.id) fd.append('user_id', user.id)
       const res = await fetch('/api/diagnosis/scan', { method: 'POST', body: fd })
       const data = await res.json()
+      if (!res.ok || data.error) {
+    alert("AI SECURITY ALERT: " + (data.error || "Upload failed."));
+    return; // This stops the UI from defaulting to 'Healthy'
+}
       setResult(data)
       setHistory(h => [data, ...h.slice(0, 9)])
       if (data?.disease_result) {
@@ -274,14 +380,15 @@ export default function DiagnosisPage({ user, onDiseaseDetected, onAskDisease })
                   </button>
                 </div>
                 <div style={{ padding: 16 }}>
-                  <button className="btn btn-primary" onClick={analyze} disabled={scanning} style={{ width: '100%', padding: '13px 20px', fontSize: 15, fontWeight: 600 }}>
-                    {scanning ? (
-                      <><span className="spinner" style={{ width: 18, height: 18 }} /> Analyzing with AI...</>
-                    ) : (
-                      <><Zap size={16} /> Scan for Disease</>
-                    )}
-                  </button>
-                  {scanning && <p style={{ textAlign: 'center', color: 'var(--text3)', fontSize: 12, marginTop: 10 }}>AI model scanning for Early Blight, Late Blight...</p>}
+                  {/* --- NEW: THE PROCESSING MATRIX TRIGGER --- */}
+                  {scanning ? (
+                    <ProcessingMatrix />
+                  ) : (
+                    <button className="btn btn-primary" onClick={analyze} disabled={scanning} style={{ width: '100%', padding: '13px 20px', fontSize: 15, fontWeight: 600 }}>
+                      <Zap size={16} /> Scan for Disease
+                    </button>
+                  )}
+                  {/* ---------------------------------------- */}
                 </div>
               </div>
             ) : (

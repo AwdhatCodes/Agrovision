@@ -20,6 +20,38 @@ print("Model successfully loaded and ready for predictions!")
 
 CLASS_NAMES = ['Early Blight', 'Late Blight', 'Healthy'] 
 
+
+# --- PHASE 1.5: Out-of-Distribution / Non-Plant Image Gatekeeper ---
+def validate_is_leaf(file_object):
+    """Safety Check: Ensures the image has enough green/yellow/brown to be a plant."""
+    try:
+        # Read bytes without consuming the file pointer permanently
+        img_bytes = file_object.read()
+        img = Image.open(io.BytesIO(img_bytes)).convert('HSV')
+        hsv_data = np.array(img)
+        
+        # Extract Hue and Saturation channels
+        hue = hsv_data[:,:,0]
+        sat = hsv_data[:,:,1]
+        
+        # In PIL, Hue is 0-255. 20-110 covers Brown, Yellow, and Green.
+        # Saturation > 40 ensures we ignore grays/whites/blacks (like cars or paper).
+        leaf_pixels = np.sum((hue >= 20) & (hue <= 110) & (sat >= 40))
+        total_pixels = hsv_data.shape[0] * hsv_data.shape[1]
+        
+        percentage = (leaf_pixels / total_pixels) * 100
+        
+        # CRITICAL: Reset the file pointer so the actual AI model can still read it!
+        file_object.seek(0)
+        
+        # If less than 10% of the photo is plant-colored, reject it
+        return percentage > 10.0
+    except Exception as e:
+        print(f"Color check failed: {e}")
+        file_object.seek(0)
+        return True # Fallback: If the check breaks, let the AI try anyway
+
+
 # --- PHASE 2: OpenCV Severity Function ---
 def calculate_severity(image_bytes):
     np_img = np.frombuffer(image_bytes, np.uint8)
@@ -142,11 +174,20 @@ def generate_gradcam(img_array, image_bytes, ai_model):
         traceback.print_exc()
         return None
 
+
 @app.route('/predict', methods=['POST'])
 def predict():
     if 'file' not in request.files: return jsonify({'error': 'No file'}), 400
     file = request.files['file']
     if file.filename == '': return jsonify({'error': 'No file selected'}), 400
+
+    # --- LEAF VALIDATION HACK: Blocks Cars, Dogs, etc. ---
+    if not validate_is_leaf(file):
+        return jsonify({
+            'success': False,
+            'error': 'Invalid Image: This does not appear to be a plant leaf. Please upload a clear photo of a potato crop.'
+        }), 400
+    # -----------------------------------------------------
 
     try:
         img_bytes = file.read()
