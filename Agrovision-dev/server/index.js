@@ -17,7 +17,7 @@ dotenv.config({ path: join(__dirname, '../.env') })
 console.log('dotenv loaded', { gemini: !!process.env.GEMINI_API_KEY })
 
 const app = express()
-const PORT = 3001
+const PORT = process.env.PORT ? Number(process.env.PORT) : 3001
 
 app.use(cors())
 app.use(express.json())
@@ -424,13 +424,6 @@ app.patch('/api/products/:id/reject', (req, res) => { db.prepare(`UPDATE product
 app.patch('/api/products/:id/quarantine', (req, res) => { db.prepare(`UPDATE products SET quarantined=1 WHERE id=?`).run(req.params.id); res.json({ success: true }) })
 app.patch('/api/products/:id/unquarantine', (req, res) => { db.prepare(`UPDATE products SET quarantined=0 WHERE id=?`).run(req.params.id); res.json({ success: true }) })
 
-app.use('/api', (req, res) => res.status(404).json({ error: 'Not found' }))
-app.use((err, req, res, next) => {
-  console.error('API error:', err)
-  if (req.path.startsWith('/api')) return res.status(err.status || 500).json({ error: err.message || 'Internal server error' })
-  next(err)
-})
-
 // ── REVIEWS ──
 app.get('/api/reviews', (req, res) => {
   const { product_id, farm_id, approved } = req.query
@@ -578,7 +571,7 @@ app.put('/api/regions/disease-risk/:region', (req, res) => {
     const msg = risk_level === 'outbreak'
       ? `${blightLabel} outbreak in ${req.params.region} — ${detection_count} potato farms affected. Listings quarantined pending inspection.`
       : `${blightLabel} activity elevated in ${req.params.region} (${detection_count} detections). Sellers advised to inspect crops.`
-    db.prepare(`INSERT INTO disease_alerts (id,region,message,severity,blight_type,simulated_email,simulated_sms) VALUES (?,?,?,?,?,1,1)`).run(randomUUID(), req.params.region, msg, risk_level, blight_type||'early_blight')
+    db.prepare(`INSERT INTO disease_alerts (id,region,message,severity,blight_type,created_at,simulated_email,simulated_sms) VALUES (?,?,?,?,?,datetime('now'),1,1)`).run(randomUUID(), req.params.region, msg, risk_level, blight_type||'early_blight')
     if (risk_level === 'outbreak') {
       db.prepare(`SELECT id FROM farms WHERE region=?`).all(req.params.region).forEach(f => db.prepare(`UPDATE products SET quarantined=1 WHERE farm_id=? AND status='approved'`).run(f.id))
     }
@@ -632,5 +625,13 @@ if (process.env.NODE_ENV === 'production') {
   app.use(express.static(join(__dirname, '../client/dist')))
   app.get('*', (req, res) => res.sendFile(join(__dirname, '../client/dist/index.html')))
 }
+
+// ── ERROR HANDLING ──
+app.use('/api', (req, res) => res.status(404).json({ error: 'Not found' }))
+app.use((err, req, res, next) => {
+  console.error('API error:', err)
+  if (req.path.startsWith('/api')) return res.status(err.status || 500).json({ error: err.message || 'Internal server error' })
+  next(err)
+})
 
 app.listen(PORT, '0.0.0.0', () => console.log(`FarmMarket API running on port ${PORT}`))
