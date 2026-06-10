@@ -223,7 +223,14 @@ function FarmerFarmPanel({ farm, onClose }) {
         console.error('Pick location failed', err)
         setLocError(err.message || 'Location update failed')
       } finally { setLocUpdating(false) }
-    }, err => { setLocError(err.message || 'Unable to get location'); setLocUpdating(false) }, { enableHighAccuracy: true, timeout: 20000 })
+    }, err => { 
+        let errorMessage = 'Unable to get location.';
+        if (err.message.toLowerCase().includes('secure origin') || err.message.includes('Only secure origins are allowed')) {
+            errorMessage = 'GPS requires a secure (HTTPS) connection or localhost.';
+        }
+        setLocError(errorMessage); 
+        setLocUpdating(false) 
+    }, { enableHighAccuracy: true, timeout: 20000 })
   }
 
   return (
@@ -548,6 +555,16 @@ export default function FarmMap({ user }) {
   const [loadError, setLoadError] = useState(null)
   const [showZones, setShowZones] = useState(true)
   const [showFarms, setShowFarms] = useState(true)
+
+  // State for setting the farmer location from the top header
+  const [locUpdating, setLocUpdating] = useState(false)
+  const [locMessage, setLocMessage] = useState({ type: '', text: '' })
+
+  // State for manual fallback
+  const [showManual, setShowManual] = useState(false)
+  const [manualLat, setManualLat] = useState('-1.1018') 
+  const [manualLng, setManualLng] = useState('37.0144') 
+
   const userCoords = user?.location?.lat && user?.location?.lng
     ? [user.location.lat, user.location.lng]
     : user?.buyer_lat && user?.buyer_lng
@@ -625,6 +642,76 @@ export default function FarmMap({ user }) {
     })
     return byRegion
   }, [isAdmin, farms])
+
+  // Enhanced function to handle fetching coords with better error parsing
+  const updateFarmerLocation = () => {
+    setLocMessage({ type: '', text: '' })
+    if (!navigator.geolocation) return setLocMessage({ type: 'error', text: 'Geolocation not supported by your browser.' })
+    
+    setLocUpdating(true)
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        try {
+          const { latitude, longitude } = pos.coords
+          const targetFarmId = user?.farm_id || user?.id 
+          const res = await fetch(`/api/farms/${targetFarmId}`, { 
+            method: 'PUT', 
+            headers: { 'Content-Type': 'application/json' }, 
+            body: JSON.stringify({ lat: latitude, lng: longitude }) 
+          })
+          
+          if (!res.ok) throw new Error(`Failed (${res.status})`)
+          
+          setLocMessage({ type: 'success', text: 'Location saved!' })
+          window.dispatchEvent(new CustomEvent('farms:reload')) // Refreshes the map markers
+          setTimeout(() => setLocMessage({ type: '', text: '' }), 5000)
+        } catch (err) {
+          setLocMessage({ type: 'error', text: err.message || 'Update failed' })
+        } finally {
+          setLocUpdating(false)
+        }
+      }, 
+      (err) => { 
+        let errorMessage = 'Unable to get location.';
+        if (err.code === 1) errorMessage = 'Location access denied. Please enable GPS permissions.';
+        if (err.code === 2) errorMessage = 'Location unavailable. Ensure your GPS is turned on.';
+        if (err.code === 3) errorMessage = 'Location request timed out.';
+        
+        // This catches the exact browser error shown in your screenshot
+        if (err.message.toLowerCase().includes('secure origin') || err.message.includes('Only secure origins are allowed')) {
+            errorMessage = 'Browser blocked GPS: Requires HTTPS or localhost to run.';
+        }
+        
+        setLocMessage({ type: 'error', text: errorMessage })
+        setLocUpdating(false) 
+      }, 
+      { enableHighAccuracy: true, timeout: 20000 }
+    )
+  }
+
+  // Function to save manually entered coordinates
+  const saveManualLocation = async () => {
+    setLocMessage({ type: '', text: '' })
+    setLocUpdating(true)
+    try {
+      const targetFarmId = user?.farm_id || user?.id 
+      const res = await fetch(`/api/farms/${targetFarmId}`, { 
+        method: 'PUT', 
+        headers: { 'Content-Type': 'application/json' }, 
+        body: JSON.stringify({ lat: parseFloat(manualLat), lng: parseFloat(manualLng) }) 
+      })
+      
+      if (!res.ok) throw new Error(`Failed (${res.status})`)
+      
+      setLocMessage({ type: 'success', text: 'Manual location saved!' })
+      window.dispatchEvent(new CustomEvent('farms:reload'))
+      setTimeout(() => { setLocMessage({ type: '', text: '' }); setShowManual(false); }, 3000)
+    } catch (err) {
+      setLocMessage({ type: 'error', text: err.message || 'Update failed' })
+    } finally {
+      setLocUpdating(false)
+    }
+  }
 
   useEffect(() => {
     if (loading || !mapRef.current) return
@@ -776,6 +863,7 @@ export default function FarmMap({ user }) {
                 : 'Locate farms and view their certification, risk status, and available products on the map.'}
             </p>
           </div>
+          
           {isAdmin && (
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               <button type="button" className={`btn ${showZones ? 'btn-primary' : 'btn-secondary'}`} style={{ fontSize: 11, padding: '6px 10px' }} onClick={() => setShowZones(z => !z)}>
@@ -786,6 +874,67 @@ export default function FarmMap({ user }) {
               </button>
             </div>
           )}
+
+          {!isAdmin && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12, alignItems: 'flex-end' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                <button 
+                  className="btn btn-primary" 
+                  onClick={updateFarmerLocation} 
+                  disabled={locUpdating}
+                  style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 14px' }}
+                >
+                  {locUpdating && !showManual ? <span className="spinner" style={{ width: 14, height: 14 }} /> : <MapPin size={14} />} 
+                  Auto-Detect Location
+                </button>
+                
+                <button 
+                  className="btn btn-secondary" 
+                  onClick={() => setShowManual(!showManual)}
+                  style={{ padding: '8px 14px', fontSize: 12 }}
+                >
+                  {showManual ? 'Cancel Manual' : 'Enter Manually'}
+                </button>
+              </div>
+
+              {/* Manual Entry Form */}
+              {showManual && (
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center', background: 'var(--bg3)', padding: '10px 14px', borderRadius: 8, border: '1px solid var(--border)' }}>
+                  <input 
+                    type="number" 
+                    step="any"
+                    value={manualLat} 
+                    onChange={e => setManualLat(e.target.value)} 
+                    placeholder="Latitude" 
+                    style={{ background: 'var(--bg2)', color: 'var(--text)', border: '1px solid var(--border)', padding: '6px 10px', borderRadius: 6, width: 100, fontSize: 12 }}
+                  />
+                  <input 
+                    type="number" 
+                    step="any"
+                    value={manualLng} 
+                    onChange={e => setManualLng(e.target.value)} 
+                    placeholder="Longitude" 
+                    style={{ background: 'var(--bg2)', color: 'var(--text)', border: '1px solid var(--border)', padding: '6px 10px', borderRadius: 6, width: 100, fontSize: 12 }}
+                  />
+                  <button 
+                    className="btn btn-primary" 
+                    onClick={saveManualLocation}
+                    disabled={locUpdating}
+                    style={{ padding: '6px 12px', fontSize: 12 }}
+                  >
+                    Save
+                  </button>
+                </div>
+              )}
+
+              {locMessage.text && (
+                <span style={{ fontSize: 12, color: locMessage.type === 'error' ? 'var(--danger)' : '#4ade80' }}>
+                  {locMessage.text}
+                </span>
+              )}
+            </div>
+          )}
+
         </div>
 
         {isAdmin && summary && (

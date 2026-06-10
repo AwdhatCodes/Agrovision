@@ -370,20 +370,27 @@ app.post('/api/farms', (req, res) => {
   res.status(201).json(db.prepare('SELECT * FROM farms WHERE id=?').get(id))
 })
 
+// UPDATED ROUTE: Properly parses incoming coordinates from frontend
 app.put('/api/farms/:id', (req, res) => {
   const { name, region, lat, lng, owner_email, owner_phone, disease_safe } = req.body
   const ex = db.prepare('SELECT * FROM farms WHERE id=?').get(req.params.id)
+  
   if (!ex) return res.status(404).json({ error: 'Not found' })
+
+  const parsedLat = lat !== undefined ? parseFloat(lat) : ex.lat
+  const parsedLng = lng !== undefined ? parseFloat(lng) : ex.lng
+
   db.prepare(`UPDATE farms SET name=?, region=?, lat=?, lng=?, owner_email=?, owner_phone=?, disease_safe=? WHERE id=?`).run(
     name || ex.name,
     region || ex.region,
-    lat !== undefined ? lat : ex.lat,
-    lng !== undefined ? lng : ex.lng,
+    parsedLat,
+    parsedLng,
     owner_email || ex.owner_email,
     owner_phone || ex.owner_phone,
     disease_safe !== undefined ? (disease_safe ? 1 : 0) : ex.disease_safe,
     req.params.id
   )
+  
   res.json(db.prepare('SELECT * FROM farms WHERE id=?').get(req.params.id))
 })
 

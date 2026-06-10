@@ -1,0 +1,94 @@
+{
+  "greetings": {
+    "keywords": ["hello", "hi", "good morning", "good evening", "how are you"],
+    "responses": [
+      "Hello 👋 I am your potato crop assistant. How can I help you today?",
+      "Hi 👋 I can help you detect diseases and guide you on treatment.",
+      "Good morning 🌤 Tell me what’s happening with your crops.",
+      "Good evening 🌙 Ask me anything about your plants."
+    ]
+  },
+  "personalization": {
+    "responses": [
+      "Nice to meet you {name} 👨‍🌾 I will help you take care of your crops.",
+      "Got it 👍 I will remember your name, Farmer {name}.",
+      "Welcome back {name} 👋 Let’s check your crops."
+    ]
+  },
+  "users": {
+    "name": null,
+    "location": null,
+    "last_disease": null,
+    "last_action": null
+  },
+  "diseases": {
+    "late blight": {
+      "name": "Late Blight",
+      "cause": "A fungus-like organism spreads quickly in cool, wet conditions.",
+      "symptoms": "Dark brown spots on leaves, stems, and tubers with a white fuzzy edge.",
+      "treatment": "Remove infected plants, improve drainage, and use a safe fungicide if needed.",
+      "prevention": "Plant resistant varieties, avoid overhead watering, and rotate crops yearly.",
+      "severity": "high",
+      "advice": "Late blight spreads fast. Remove infected leaves, keep plants dry, and protect the crop with a fungicide if needed."
+    },
+    "early blight": {
+      "name": "Early Blight",
+      "cause": "A fungus grows on older leaves when the weather is warm and humid.",
+      "symptoms": "Small brown spots with rings that grow into larger leaf patches.",
+      "treatment": "Remove the damaged leaves, improve airflow, and apply a protective spray if it keeps spreading.",
+      "prevention": "Space plants well, keep leaves dry, and rotate crops to reduce disease carryover.",
+      "severity": "medium",
+      "advice": "Early blight can be managed by removing bad leaves, keeping plants airy, and spraying only if needed."
+    },
+    "bacterial wilt": {
+      "name": "Bacterial Wilt",
+      "cause": "Soil bacteria enter the plant through wounds or insect damage.",
+      "symptoms": "Plants wilt quickly, especially on hot days, and leaves may turn yellow before collapsing.",
+      "treatment": "Remove and destroy infected plants. Do not compost them near healthy crops.",
+      "prevention": "Use clean seed potatoes, avoid injury to plants, and rotate crops away from potatoes.",
+      "severity": "high",
+      "advice": "Bacterial wilt is serious. Remove sick plants and stop the spread by using clean seed potato and gentle handling."
+    },
+    "healthy": {
+      "name": "Healthy",
+      "cause": "Good care and balanced growing conditions keep plants strong.",
+      "symptoms": "Green leaves, sturdy stems, and no obvious disease spots or damage.",
+      "treatment": "Keep watering evenly, use compost or balanced fertilizer, and inspect plants regularly.",
+      "prevention": "Keep soil healthy, rotate crops, and remove weeds or debris near plants.",
+      "severity": "low",
+      "advice": "Your crop looks healthy. Continue even watering, good soil care, and regular checks so it stays that way."
+    }
+  },
+  "actions": {
+    "spraying": {
+      "keywords": ["spray", "spraying", "sprayed", "fungicide", "pesticide"],
+      "advice": "Spray in the early morning when leaves are dry. Use the right product and follow instructions closely."
+    },
+    "watering": {
+      "keywords": ["water", "watering", "wet", "dry", "moisture"],
+      "advice": "Water evenly and avoid waterlogging. Check the soil before you water, and keep roots moist but not soggy."
+    },
+    "removal": {
+      "keywords": ["remove", "removal", "pull", "cut", "destroy"],
+      "advice": "Remove badly infected leaves or plants and destroy them away from the field. This stops disease from spreading."
+    },
+    "prevention_general": {
+      "keywords": ["prevent", "prevention", "protect", "avoid", "keep safe"],
+      "advice": "Keep plants healthy with good soil, proper spacing, clean tools, and crop rotation each year."
+    }
+  },
+  "fallback": {
+    "unknown_responses": [
+      "I can only help with potato diseases and farming advice 🌱",
+      "I didn’t understand that. Try asking about diseases like Late Blight or Early Blight.",
+      "Please scan a leaf or ask a farming-related question.",
+      "I couldn’t identify the issue. You may need an agricultural expert."
+    ],
+    "no_disease_responses": [
+      "I could not find that disease in my list. Try Late Blight, Early Blight, Bacterial Wilt, or Healthy crop care.",
+      "I know a few potato diseases. Ask me about Late Blight, Early Blight, Bacterial Wilt, or say if the plant looks healthy.",
+      "That disease is not in my list yet. Ask me about the common potato diseases I know."
+    ],
+    "help": "Ask me about potato disease symptoms, treatment, prevention, or say your name so I can remember you."
+  }
+}
