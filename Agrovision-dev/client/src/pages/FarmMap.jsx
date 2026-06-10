@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react'
 import {
-  Leaf, MapPin, X, BarChart3, Activity, AlertTriangle,
+  Leaf, MapPin, X, Zap, BarChart3, Activity, AlertTriangle,
   Package, Microscope, Award, Phone, Mail, Layers, TrendingUp,
   ShieldCheck, List, Clock,
 } from 'lucide-react'
@@ -80,7 +80,12 @@ function formatConfidence(value) {
   return Math.round(confidence > 1 ? confidence : confidence * 100)
 }
 
+function getScanImage(src) {
+  return src?.last_scan_heatmap || src?.heatmap || src?.imageUrl || src?.image_url || src?.last_scan_image_url || null
+}
+
 function buildScanPopup(report) {
+  const imageUrl = getScanImage(report)
   return `
     <div style="font-family:system-ui,sans-serif;min-width:220px;color:#e8eaf0">
       <p style="font-weight:700;font-size:14px;margin:0 0 6px">${report.farmName}</p>
@@ -90,9 +95,10 @@ function buildScanPopup(report) {
         Date: ${new Date(report.date).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}<br/>
         Confidence: ${formatConfidence(report.confidenceScore)}%
       </div>
+      ${imageUrl ? `
       <div style="border:1px solid rgba(255,255,255,0.12);border-radius:10px;overflow:hidden;background:#0f172a;margin-bottom:8px;">
-        <img src="${report.imageUrl}" alt="Grad-CAM" style="width:100%;display:block;height:auto;" />
-      </div>
+        <img src="${imageUrl}" alt="Grad-CAM" style="width:100%;display:block;height:auto;" />
+      </div>` : `<div style="font-size:11px;color:#9aa3b8;margin-bottom:8px">No scan image available for this report.</div>`}
       <div style="font-size:10px;color:#9aa3b8;line-height:1.4">Grad-CAM AI leaf heatmap shown above for the selected scan. Use this to verify infection regions and assist inspection.</div>
     </div>`
 }
@@ -284,6 +290,7 @@ function AdminFarmPanel({ farm, onClose }) {
   const [analytics, setAnalytics] = useState(null)
   const [loading, setLoading] = useState(true)
   const riskColor = RISK_COLORS[farm.risk_level] || '#9aa3b8'
+  const latestScan = scans[0]
 
   useEffect(() => {
     setLoading(true)
@@ -372,6 +379,15 @@ function AdminFarmPanel({ farm, onClose }) {
                 <p style={{ fontSize: 10, color: 'var(--text3)', marginTop: 4 }}>
                   {formatConfidence(farm.last_scan_confidence)}% · {farm.last_scan_severity || 'N/A'} · {farm.last_scan_at?.slice(0, 10)}
                 </p>
+              </div>
+            )}
+            {latestScan && (latestScan.heatmap || latestScan.image_url) && (
+              <div className="card" style={{ padding: 12, borderColor: latestScan.disease_result?.includes('blight') ? 'rgba(248,113,113,0.3)' : 'var(--border)' }}>
+                <p style={{ fontSize: 11, fontWeight: 600, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}><Zap size={12} /> Latest scan heatmap</p>
+                <div style={{ borderRadius: 14, overflow: 'hidden', background: '#0f172a', border: '1px solid rgba(255,255,255,0.08)' }}>
+                  <img src={latestScan.heatmap || latestScan.image_url} alt="Latest scan" style={{ width: '100%', display: 'block', objectFit: 'cover', maxHeight: 210 }} />
+                </div>
+                <p style={{ fontSize: 11, color: 'var(--text3)', marginTop: 8 }}>{latestScan.disease_result ? `${SCAN_LABELS[latestScan.disease_result] || latestScan.disease_result}, ${formatConfidence(latestScan.confidence)}% confidence` : 'Scan available'}</p>
               </div>
             )}
           </div>
@@ -492,8 +508,13 @@ function buildFarmerPopup(farm) {
 }
 
 function buildAdminPopup(farm) {
+  const scanImage = farm.last_scan_heatmap || farm.last_scan_image_url || null
   const scanLine = farm.last_scan_at
     ? `<div style="font-size:10px;color:#9aa3b8;margin-top:4px">Last scan: ${SCAN_LABELS[farm.last_scan_result] || farm.last_scan_result} (${formatConfidence(farm.last_scan_confidence)}%)</div>` : ''
+  const scanImageBlock = scanImage ? `
+      <div style="border:1px solid rgba(255,255,255,0.12);border-radius:10px;overflow:hidden;background:#0f172a;margin:10px 0;">
+        <img src="${scanImage}" alt="Latest scan heatmap" style="width:100%;display:block;height:auto;" />
+      </div>` : ''
   return `
     <div style="font-family:system-ui,sans-serif;min-width:220px;color:#e8eaf0">
       <p style="font-weight:700;font-size:14px;margin:0 0 2px">${farm.name}</p>
@@ -507,6 +528,7 @@ function buildAdminPopup(farm) {
         <div>Views ${farm.total_views || 0} · Scans ${farm.scan_count || 0}</div>
         <div>Region dets: ${farm.detection_count ?? 0} · ${farm.disease_safe ? 'Disease-safe' : 'Not disease-safe'}</div>
       </div>
+      ${scanImageBlock}
       ${scanLine}
       <button onclick="window.__mapSelectFarm('${farm.id}')" style="margin-top:10px;width:100%;background:#4ade80;color:#0a1a0f;border:none;padding:7px;font-size:12px;font-weight:600;cursor:pointer;border-radius:6px">Open analysis panel →</button>
     </div>`

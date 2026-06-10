@@ -219,7 +219,7 @@ app.post('/api/diagnosis/scan', upload.single('image'), async (req, res) => {
   const { disease_result, confidence, affected_area_pct, severity, heatmap = null } = diagnosis
   const id = randomUUID()
   const now = new Date().toISOString().slice(0, 19).replace('T', ' ')
-  db.prepare(`INSERT INTO disease_scans (id, user_id, farm_id, image_url, disease_result, confidence, severity, affected_area_pct, notes, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(id, user_id||null, farm_id||null, image_url, disease_result, confidence, severity, affected_area_pct, notes||null, now)
+  db.prepare(`INSERT INTO disease_scans (id, user_id, farm_id, image_url, heatmap, disease_result, confidence, severity, affected_area_pct, notes, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(id, user_id||null, farm_id||null, image_url, heatmap, disease_result, confidence, severity, affected_area_pct, notes||null, now)
   res.json({ id, disease_result, confidence, affected_area_pct, severity, heatmap, image_url, created_at: now })
 })
 
@@ -273,6 +273,8 @@ app.get('/api/farms/map', (req, res) => {
         (SELECT disease_result FROM disease_scans WHERE farm_id = f.id ORDER BY created_at DESC LIMIT 1) as last_scan_result,
         (SELECT confidence FROM disease_scans WHERE farm_id = f.id ORDER BY created_at DESC LIMIT 1) as last_scan_confidence,
         (SELECT severity FROM disease_scans WHERE farm_id = f.id ORDER BY created_at DESC LIMIT 1) as last_scan_severity,
+        (SELECT image_url FROM disease_scans WHERE farm_id = f.id ORDER BY created_at DESC LIMIT 1) as last_scan_image_url,
+        (SELECT heatmap FROM disease_scans WHERE farm_id = f.id ORDER BY created_at DESC LIMIT 1) as last_scan_heatmap,
         (SELECT created_at FROM disease_scans WHERE farm_id = f.id ORDER BY created_at DESC LIMIT 1) as last_scan_at,
         (SELECT status FROM certifications WHERE farm_id = f.id ORDER BY created_at DESC LIMIT 1) as cert_status
       FROM farms f
