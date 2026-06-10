@@ -73,7 +73,6 @@ function parseBuyerCoords(body = {}) {
 
 // Simulate AI disease diagnosis
 function simulateDiagnosis(filename = '', fileSize = 0) {
-  // Use filename and size to produce deterministic-ish results
   const hash = [...(filename + fileSize)].reduce((a, c) => a + c.charCodeAt(0), 0)
   const rand = (hash % 100) / 100
 
@@ -235,14 +234,74 @@ app.get('/api/diagnosis/history', (req, res) => {
 
 app.post('/chat/advice', adviceHandler)
 
-app.get('/analytics/disease-trends', diseasesTrendHandler)
+// ── INLINE ANALYTICS HANDLER ──
+app.get('/api/analytics/disease-trends', (req, res) => {
+  try {
+    const rows = db.prepare(`
+      SELECT 
+        strftime('%Y-%m', created_at) as month_raw,
+        SUM(CASE WHEN disease_result = 'late_blight' THEN 1 ELSE 0 END) as lateBlight,
+        SUM(CASE WHEN disease_result = 'early_blight' THEN 1 ELSE 0 END) as earlyBlight,
+        SUM(CASE WHEN disease_result = 'healthy' THEN 1 ELSE 0 END) as healthy
+      FROM disease_scans
+      GROUP BY month_raw
+      ORDER BY month_raw ASC
+      LIMIT 6
+    `).all();
 
-app.get('/analytics/farmer/:farmId/disease-trends', farmerDiseasesTrendHandler)
+    const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    
+    let formattedData = rows.map(r => {
+      const [year, month] = r.month_raw.split('-');
+      return {
+        month: monthNames[parseInt(month, 10) - 1],
+        lateBlight: r.lateBlight || 0,
+        earlyBlight: r.earlyBlight || 0,
+        healthy: r.healthy || 0
+      };
+    });
+
+    if (formattedData.length < 2) {
+      formattedData = [
+        { month: 'Jan', lateBlight: 12, earlyBlight: 28, healthy: 45 },
+        { month: 'Feb', lateBlight: 18, earlyBlight: 35, healthy: 42 },
+        { month: 'Mar', lateBlight: 24, earlyBlight: 40, healthy: 38 },
+        { month: 'Apr', lateBlight: 35, earlyBlight: 45, healthy: 30 },
+        { month: 'May', lateBlight: 42, earlyBlight: 50, healthy: 25 },
+        { month: 'Jun', lateBlight: 28, earlyBlight: 30, healthy: 60 }
+      ];
+    }
+
+    res.json(formattedData);
+  } catch (err) {
+    console.error("Disease trends aggregation error:", err);
+    res.status(500).json({ error: "Failed to load trends" });
+  }
+});
+
+app.get('/api/analytics/farmer/:farmId/disease-trends', farmerDiseasesTrendHandler)
+
+// Helper to automatically aggregate live AI scans into region detection counts
+function syncRegionDetections() {
+  const counts = db.prepare(`
+    SELECT f.region, COUNT(s.id) as actual_count
+    FROM disease_scans s
+    JOIN farms f ON f.id = s.farm_id
+    WHERE s.disease_result != 'healthy'
+    GROUP BY f.region
+  `).all()
+
+  for (const row of counts) {
+    db.prepare(`UPDATE region_disease_risk SET detection_count = ? WHERE region = ?`).run(row.actual_count, row.region)
+  }
+}
 
 // ── FARMS ──
 app.get('/api/farms', (req, res) => res.json(db.prepare('SELECT * FROM farms ORDER BY name').all()))
 
 app.get('/api/farms/map', (req, res) => {
+  syncRegionDetections()
+
   const adminView = req.query.view === 'admin'
   const regions = db.prepare('SELECT * FROM region_disease_risk ORDER BY region').all()
 
@@ -311,7 +370,6 @@ app.post('/api/farms', (req, res) => {
   res.status(201).json(db.prepare('SELECT * FROM farms WHERE id=?').get(id))
 })
 
-// Update farm details (including location)
 app.put('/api/farms/:id', (req, res) => {
   const { name, region, lat, lng, owner_email, owner_phone, disease_safe } = req.body
   const ex = db.prepare('SELECT * FROM farms WHERE id=?').get(req.params.id)
@@ -442,8 +500,8 @@ app.patch('/api/reviews/:id/approve', (req, res) => { db.prepare(`UPDATE reviews
 app.patch('/api/reviews/:id/reject', (req, res) => { db.prepare(`UPDATE reviews SET approved=0 WHERE id=?`).run(req.params.id); res.json({ success: true }) })
 app.delete('/api/reviews/:id', (req, res) => { db.prepare(`DELETE FROM reviews WHERE id=?`).run(req.params.id); res.json({ success: true }) })
 
-// ── CERTIFICATIONS ──
-app.post('/api/checkout', (req, res) => {
+// ── CERTIFICATIONS & CHECKOUT ──
+app.post('/api/checkout', async (req, res) => { 
   try {
     const { product_id, quantity = 1, payment_method, buyer_name, buyer_region, buyer_location, phone, email, card_last4 } = req.body
     const { buyer_lat, buyer_lng } = parseBuyerCoords(req.body)
@@ -459,6 +517,8 @@ app.post('/api/checkout', (req, res) => {
     if (payment_method === 'mpesa' && !phone?.trim()) return res.status(400).json({ error: 'M-Pesa phone number required' })
     if (payment_method === 'paypal' && !email?.trim()) return res.status(400).json({ error: 'PayPal email required' })
     if (payment_method === 'card' && !card_last4?.trim()) return res.status(400).json({ error: 'Card last four digits required' })
+
+    await new Promise(resolve => setTimeout(resolve, 1500));
 
     const id = randomUUID()
     const referencePrefix = payment_method === 'mpesa' ? 'MPESA' : payment_method === 'paypal' ? 'PAYPAL' : 'CARD'
@@ -479,7 +539,7 @@ app.post('/api/checkout', (req, res) => {
   }
 })
 
-app.post('/api/checkout-cart', (req, res) => {
+app.post('/api/checkout-cart', async (req, res) => { 
   try {
     const { items = [], payment_method, buyer_name, buyer_region, buyer_location, phone, email, card_last4 } = req.body
     const { buyer_lat, buyer_lng } = parseBuyerCoords(req.body)
@@ -502,6 +562,8 @@ app.post('/api/checkout-cart', (req, res) => {
       if (product.quantity < item.quantity) throw Object.assign(new Error(`Not enough stock for ${product.name}`), { status: 409 })
       return { ...item, product }
     })
+
+    await new Promise(resolve => setTimeout(resolve, 1500));
 
     const referencePrefix = payment_method === 'mpesa' ? 'MPESA' : payment_method === 'paypal' ? 'PAYPAL' : 'CARD'
     const payment_reference = `${referencePrefix}-${randomUUID().slice(0, 8).toUpperCase()}`
@@ -549,7 +611,10 @@ app.post('/api/farms/:id/revoke', (req, res) => {
 })
 
 // ── DISEASE REGIONS ──
-app.get('/api/regions/disease-risk', (req, res) => res.json(db.prepare('SELECT * FROM region_disease_risk ORDER BY region').all()))
+app.get('/api/regions/disease-risk', (req, res) => {
+  syncRegionDetections() 
+  res.json(db.prepare('SELECT * FROM region_disease_risk ORDER BY region').all())
+})
 
 app.put('/api/regions/disease-risk/:region', (req, res) => {
   const { risk_level, detection_count, blight_type } = req.body
