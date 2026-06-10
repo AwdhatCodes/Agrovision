@@ -4,7 +4,10 @@ import { dirname, join } from 'path'
 import { fileURLToPath } from 'url'
 import { chatbotResponse } from '../chatbot.js'
 
-const MODEL_NAME = 'models/gemini-2.5-pro'
+// --- THE FIX: Downgraded to the fast, free Flash model ---
+const MODEL_NAME = 'gemini-pro'
+// ---------------------------------------------------------
+
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const localKnowledge = JSON.parse(readFileSync(join(__dirname, '../data/local-knowledge.json'), 'utf8'))
 
